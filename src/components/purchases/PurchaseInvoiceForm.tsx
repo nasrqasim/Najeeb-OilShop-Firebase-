@@ -178,11 +178,16 @@ export default function PurchaseInvoiceForm({ onClose, onSave, initialData }: Pu
         ? `PI-${Date.now().toString().slice(-6)}`
         : formData.invoiceNumber;
 
+      const selectedVendor = vendors.find(v => (v._id || v.id) === formData.vendorId);
+      const vendorName = selectedVendor ? (selectedVendor.companyName || selectedVendor.name) : "";
+
       const payload = {
         invoiceNo,
         type: "purchase",
         date: formData.invoiceDate,
         partyId: formData.vendorId,
+        partyName: vendorName,
+        vendorName: vendorName,
         reference: formData.vendorInvoiceNo,
         currency: formData.currency,
         dueDate: formData.dueDate || undefined,

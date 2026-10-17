@@ -18,21 +18,26 @@ export default function SaleSummaryReportPage() {
         const res = await fetch('/api/sales');
         const json = await res.json();
         if (json.ok && json.data) {
-          const transformed = json.data.map((s: any) => ({
-            id: s._id,
-            date: new Date(s.date).toLocaleDateString(),
-            docNo: s.invoiceNo || s.docNo || "N/A",
-            badge: s.type === 'sale_return' ? 'SR' : s.type === 'sale_order' ? 'SO' : 'SI',
-            customer: s.partyId?.name || s.partyId?.companyName || s.customerName || "Walk-in",
-            salesperson: s.employeeId?.name || "-",
-            gross: s.subTotal || 0,
-            discount: s.discountAmount || 0,
-            gst: s.taxAmount || 0,
-            net: s.totalAmount || 0,
-            status: s.status || "Posted",
-            statusColor: "text-emerald-600 bg-emerald-50",
-            badgeColor: s.type === 'sale_return' ? "text-rose-600 bg-rose-50 border-rose-200" : "text-blue-600 bg-blue-50 border-blue-200"
-          }));
+          const transformed = json.data
+            .filter((s: any) => s.type !== 'quotation')
+            .map((s: any) => {
+              const isRet = s.type === 'sale_return' || s.type === 'non_tax_sale_return' || s.type === 'pos_return';
+              return {
+                id: s._id,
+                date: new Date(s.date).toLocaleDateString(),
+                docNo: s.invoiceNo || s.docNo || "N/A",
+                badge: isRet ? 'SR' : s.type === 'sale_order' ? 'SO' : 'SI',
+                customer: s.partyId?.name || s.partyId?.companyName || s.customerName || "Walk-in",
+                salesperson: s.employeeId?.name || "-",
+                gross: s.subTotal || 0,
+                discount: s.discountAmount || 0,
+                gst: s.taxAmount || 0,
+                net: s.totalAmount || 0,
+                status: s.status || "Posted",
+                statusColor: "text-emerald-600 bg-emerald-50",
+                badgeColor: isRet ? "text-rose-600 bg-rose-50 border-rose-200" : "text-blue-600 bg-blue-50 border-blue-200"
+              };
+            });
           setData(transformed);
         }
       } catch (error) {

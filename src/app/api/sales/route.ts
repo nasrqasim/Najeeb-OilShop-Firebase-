@@ -24,7 +24,15 @@ export async function GET() {
         const itemObj = l.itemId ? itemMap.get(String(l.itemId)) : null;
         return {
           ...l,
-          itemId: itemObj ? { _id: itemObj._id, name: itemObj.name, code: itemObj.code, category: itemObj.category, unit: itemObj.unit } : l.itemId
+          itemId: itemObj ? { 
+            _id: itemObj._id, 
+            name: itemObj.name, 
+            code: itemObj.code, 
+            category: itemObj.category, 
+            unit: itemObj.unit,
+            purchaseRate: Number(itemObj.purchaseRate) || Number(itemObj.costPrice) || 0
+          } : l.itemId,
+          purchaseRate: Number(l.purchaseRate || itemObj?.purchaseRate || itemObj?.costPrice || 0)
         };
       }) : [];
 

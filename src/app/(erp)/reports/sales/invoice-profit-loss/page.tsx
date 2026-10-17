@@ -18,15 +18,18 @@ export default function InvoiceProfitLossReportPage() {
         const res = await fetch('/api/sales');
         const json = await res.json();
         if (json.ok && json.data) {
-          const invoices = json.data.map((s: any) => {
-            const isReturn = (s.type === 'sale_return' || s.type === 'non_tax_sale_return');
-            let cost = 0;
-            s.lines?.forEach((line: any) => {
-              cost += (line.itemId?.purchaseRate || 0) * line.qty;
-            });
-            const revenue = isReturn ? 0 : (s.totalAmount || 0);
-            const returns = isReturn ? (s.totalAmount || 0) : 0;
-            const grossProfit = isReturn ? -cost : (revenue - cost);
+          const invoices = json.data
+            .filter((s: any) => s.type !== 'quotation' && s.type !== 'sale_order')
+            .map((s: any) => {
+              const isReturn = (s.type === 'sale_return' || s.type === 'non_tax_sale_return' || s.type === 'pos_return');
+              let cost = 0;
+              s.lines?.forEach((line: any) => {
+                const rate = Number(line.itemId?.purchaseRate ?? line.purchaseRate ?? line.cost ?? 0);
+                cost += rate * (Number(line.qty) || 0);
+              });
+              const revenue = isReturn ? 0 : (s.totalAmount || 0);
+              const returns = isReturn ? (s.totalAmount || 0) : 0;
+              const grossProfit = isReturn ? -cost : (revenue - cost);
             
             return {
               id: s._id,

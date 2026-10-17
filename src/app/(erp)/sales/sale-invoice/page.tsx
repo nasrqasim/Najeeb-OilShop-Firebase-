@@ -150,7 +150,7 @@ export default function SaleInvoicePage() {
     const matchesDate = !filterDate || invDateStr === filterDate;
     
     return matchesSearch && matchesStatus && matchesDate;
-  });
+  }).sort((a: any, b: any) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
 
   return (
     <div className="space-y-6">

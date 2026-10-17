@@ -1,5 +1,7 @@
 import { fail, ok } from "@/lib/api";
 import { getAllCashReceipts, createCashReceipt } from "@/lib/firestore/paymentsRepository";
+import { getAllParties } from "@/lib/firestore/partiesRepository";
+import { getDocuments } from "@/lib/firestore/genericRepository";
 import { recalculatePartyBalance, postCashReceiptJournalEntries } from "@/services/posting/invoicePostingHelper";
 
 export async function GET(req: Request) {
@@ -7,7 +9,43 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const search = url.searchParams.get("search") || "";
 
-    let rows = await getAllCashReceipts();
+    const [allReceipts, allParties, allAccounts] = await Promise.all([
+      getAllCashReceipts(),
+      getAllParties(),
+      getDocuments("accounts")
+    ]);
+
+    const partyMap = new Map(allParties.map((p: any) => [String(p._id || p.id), p]));
+    const accountMap = new Map(allAccounts.map((a: any) => [String(a._id || a.id), a]));
+
+    let rows = allReceipts.map((r: any) => {
+      const rawPid = String(r.partyId?._id || r.partyId?.id || r.partyId || r.party || "");
+      const matchedParty = rawPid ? partyMap.get(rawPid) : null;
+
+      const partyObj = matchedParty
+        ? {
+            _id: matchedParty._id || matchedParty.id,
+            name: matchedParty.name,
+            companyName: matchedParty.companyName || matchedParty.name,
+            type: matchedParty.type
+          }
+        : (typeof r.partyId === "object" && r.partyId !== null ? r.partyId : null);
+
+      const resolvedPartyName = matchedParty?.companyName || matchedParty?.name || r.partyName || r.party || (partyObj?.companyName || partyObj?.name);
+
+      const rawAid = String(r.cashAccountId?._id || r.cashAccountId || "");
+      const matchedAcc = rawAid ? accountMap.get(rawAid) : null;
+      const displayCashAcc = matchedAcc ? (matchedAcc.name || matchedAcc.title) : (r.cashAccountTitle || r.cashAccount || "Cash in Hand");
+
+      return {
+        ...r,
+        partyId: partyObj || r.partyId,
+        party: resolvedPartyName,
+        partyName: resolvedPartyName,
+        cashAccountTitle: displayCashAcc,
+        cashAccount: displayCashAcc
+      };
+    });
 
     if (search) {
       const q = search.toLowerCase();
@@ -27,6 +65,9 @@ export async function GET(req: Request) {
                partyName.toLowerCase().includes(q);
       });
     }
+
+    // Sort newest receipts first
+    rows.sort((a: any, b: any) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
 
     return ok(rows);
   } catch (e) {

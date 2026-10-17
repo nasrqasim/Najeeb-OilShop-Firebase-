@@ -248,9 +248,9 @@ export default function CashReceiptPage() {
                 filteredReceipts.map((p) => {
                   const rType = p.receiptType || "party";
                   const displayParty = rType === "party"
-                    ? (p.partyId?.companyName || p.partyId?.name || p.party || "N/A")
+                    ? (p.partyId?.companyName || p.partyId?.name || p.partyName || p.party || "N/A")
                     : rType === "petty"
-                      ? (p.partyId ? (p.partyId?.companyName || p.partyId?.name || "N/A") : `Petty Contra (${p.contraLines?.length || 0} line(s))`)
+                      ? (p.partyId ? (p.partyId?.companyName || p.partyId?.name || p.partyName || p.party || "N/A") : `Petty Contra (${p.contraLines?.length || 0} line(s))`)
                       : `Multi-Party (${p.partyLines?.length || 0} line(s))`;
 
                   const displayCashAcc = p.cashAccountId?.title || p.cashAccountTitle || p.cashAccount || "N/A";

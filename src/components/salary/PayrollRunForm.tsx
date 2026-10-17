@@ -26,17 +26,22 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
 
   const generatePayroll = () => {
     const activeEmployees = employees.filter(e => e.status === "Active" || !e.status);
-    const payrollStaff = activeEmployees.map(e => ({
-      employeeId: e._id,
-      name: e.name,
-      designation: e.designation,
-      basicSalary: e.basicSalary || 0,
-      allowances: 0,
-      deductions: 0,
-      advances: 0,
-      loans: 0,
-      netSalary: e.basicSalary || 0
-    }));
+    const payrollStaff = activeEmployees.map(e => {
+      const salary = Number(e.fixedMonthlySalary || e.basicSalary || 0);
+      const installment = Number(e.monthlyInstallment || 0);
+      const net = Math.max(0, salary - installment);
+      return {
+        employeeId: e._id,
+        name: e.name,
+        designation: e.designation,
+        basicSalary: salary,
+        allowances: 0,
+        deductions: 0,
+        advances: 0,
+        loans: installment,
+        netSalary: net
+      };
+    });
     setStaff(payrollStaff);
     setIsGenerated(true);
   };

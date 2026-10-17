@@ -127,7 +127,7 @@ export default function PurchaseInvoicePage() {
     const matchesDate = !filterDate || invDateStr === filterDate;
     
     return matchesSearch && matchesStatus && matchesDate;
-  });
+  }).sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
 
   return (
     <div className="space-y-6">
@@ -256,7 +256,9 @@ export default function PurchaseInvoicePage() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{inv.partyId?.companyName || inv.partyId?.name || "N/A"}</span>
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                        {inv.partyId?.companyName || inv.partyId?.name || inv.vendorName || inv.partyName || "N/A"}
+                      </span>
                     </td>
 
                     <td className="px-6 py-4">

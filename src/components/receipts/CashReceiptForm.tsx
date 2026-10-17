@@ -252,8 +252,13 @@ export default function CashReceiptForm({ onClose, initialData }: CashReceiptFor
         partyReceiptType: formData.partyReceiptType
       };
 
+      const partyDisplayName = previewParty?.companyName || previewParty?.name || "";
+
       if (activeTab === "party") {
         payload.partyId = formData.partyId;
+        payload.party = partyDisplayName;
+        payload.partyName = partyDisplayName;
+        payload.partyType = partyType;
         payload.contraLines = [];
         payload.partyLines = [];
       } else if (activeTab === "petty") {
@@ -267,6 +272,9 @@ export default function CashReceiptForm({ onClose, initialData }: CashReceiptFor
           }));
         } else {
           payload.partyId = formData.partyId;
+          payload.party = partyDisplayName;
+          payload.partyName = partyDisplayName;
+          payload.partyType = partyType;
           payload.contraLines = [];
         }
         payload.partyLines = [];

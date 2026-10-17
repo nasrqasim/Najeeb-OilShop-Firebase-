@@ -19,29 +19,32 @@ export default function ItemProfitLossReportPage() {
         const json = await res.json();
         if (json.ok && json.data) {
           const itemMap: any = {};
-          json.data.forEach((s: any) => {
-            const factor = (s.type === 'sale_return' || s.type === 'non_tax_sale_return') ? -1 : 1;
-            s.lines?.forEach((line: any) => {
-              const code = line.itemId?.code || "N/A";
-              if (!itemMap[code]) {
-                itemMap[code] = {
-                  id: code,
-                  itemCode: code,
-                  itemName: line.itemId?.name || "Unknown Item",
-                  qtySold: 0,
-                  revenue: 0,
-                  cost: 0
-                };
-              }
-              const qty = line.qty * factor;
-              const rev = (line.netAmount || 0) * factor;
-              const costAmt = (line.itemId?.purchaseRate || 0) * line.qty * factor;
-              
-              itemMap[code].qtySold += qty;
-              itemMap[code].revenue += rev;
-              itemMap[code].cost += costAmt;
+          json.data
+            .filter((s: any) => s.type !== 'quotation' && s.type !== 'sale_order')
+            .forEach((s: any) => {
+              const factor = (s.type === 'sale_return' || s.type === 'non_tax_sale_return' || s.type === 'pos_return') ? -1 : 1;
+              s.lines?.forEach((line: any) => {
+                const code = line.itemId?.code || "N/A";
+                if (!itemMap[code]) {
+                  itemMap[code] = {
+                    id: code,
+                    itemCode: code,
+                    itemName: line.itemId?.name || "Unknown Item",
+                    qtySold: 0,
+                    revenue: 0,
+                    cost: 0
+                  };
+                }
+                const qty = (Number(line.qty) || 0) * factor;
+                const rev = (Number(line.netAmount) || (Number(line.qty || 0) * Number(line.rate || 0)) || 0) * factor;
+                const rate = Number(line.itemId?.purchaseRate ?? line.purchaseRate ?? line.cost ?? 0);
+                const costAmt = rate * (Number(line.qty) || 0) * factor;
+                
+                itemMap[code].qtySold += qty;
+                itemMap[code].revenue += rev;
+                itemMap[code].cost += costAmt;
+              });
             });
-          });
 
           const items = Object.values(itemMap).map((item: any) => {
             const profit = item.revenue - item.cost;

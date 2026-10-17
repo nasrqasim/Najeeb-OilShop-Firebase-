@@ -212,7 +212,11 @@ export default function CustomerProfileHistory({
 
     // Process Sales & Returns
     sales.forEach((s: any) => {
-      const isReturn = s.type === "sale_return" || s.type === "non_tax_sale_return";
+      // Exclude non-financial documents: quotation, sale order
+      if (s.type === "quotation" || s.type === "sale_order") {
+        return;
+      }
+      const isReturn = s.type === "sale_return" || s.type === "non_tax_sale_return" || s.type === "pos_return";
       // Build product description like old software
       const itemsList = s.lines || s.items || [];
       let productDesc = '';
@@ -302,10 +306,10 @@ export default function CustomerProfileHistory({
   const ledgerData = getProcessedLedger();
 
   // Overview metrics calculations
-  const totalSales = sales.filter(s => s.type !== "sale_return" && s.type !== "non_tax_sale_return").reduce((a, s) => a + (s.totalAmount || 0), 0);
+  const totalSales = sales.filter(s => s.type !== "sale_return" && s.type !== "non_tax_sale_return" && s.type !== "pos_return" && s.type !== "quotation" && s.type !== "sale_order").reduce((a, s) => a + (s.totalAmount || 0), 0);
   const totalReceived = receipts.reduce((a, r) => a + (r.amount || 0), 0);
   
-  const lastPurchaseTx = sales.find(s => s.type !== "sale_return" && s.type !== "non_tax_sale_return");
+  const lastPurchaseTx = sales.find(s => s.type !== "sale_return" && s.type !== "non_tax_sale_return" && s.type !== "pos_return" && s.type !== "quotation" && s.type !== "sale_order");
   const lastPaymentTx = receipts[0];
 
   const outstandingAmount = Math.max(0, (currentCustomer.openingBalance || 0) + totalSales - totalReceived);

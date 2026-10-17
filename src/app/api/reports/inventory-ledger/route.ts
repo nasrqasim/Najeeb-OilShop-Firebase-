@@ -169,7 +169,7 @@ export async function GET(req: Request) {
       return true;
     });
 
-    const totalIn = periodRows.reduce((s, r) => s + r.in, 0);
+    const totalIn = periodRows.filter(r => r.refNo !== "Opening").reduce((s, r) => s + r.in, 0);
     const totalOut = periodRows.reduce((s, r) => s + r.out, 0);
     const closingBalance =
       periodRows.length > 0 ? periodRows[periodRows.length - 1].balance : openingBalance;

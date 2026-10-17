@@ -13,14 +13,27 @@ export async function GET() {
     const accountMap = new Map(accounts.map((a: any) => [String(a._id), a]));
     const jobMap = new Map(jobs.map((j: any) => [String(j._id), j]));
 
-    const populatedRows = rows.map((r: any) => ({
-      ...r,
-      partyId: r.partyId ? partyMap.get(String(r.partyId)) || r.partyId : null,
-      cashAccountId: r.cashAccountId ? accountMap.get(String(r.cashAccountId)) || r.cashAccountId : null,
-      jobId: r.jobId ? jobMap.get(String(r.jobId)) || r.jobId : null,
-    }));
+    const populatedRows = rows.map((r: any) => {
+      const rawPid = String(r.partyId?._id || r.partyId?.id || r.partyId || r.vendor || "");
+      const p = rawPid ? partyMap.get(rawPid) : null;
+      const partyObj = p
+        ? { _id: p._id, name: p.name, companyName: p.companyName || p.name, type: p.type }
+        : (typeof r.partyId === "object" && r.partyId !== null ? r.partyId : null);
 
-    populatedRows.sort((a: any, b: any) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
+      const resolvedName = p?.companyName || p?.name || r.partyName || r.vendorName || r.vendor || (partyObj?.companyName || partyObj?.name);
+
+      return {
+        ...r,
+        partyId: partyObj || r.partyId,
+        vendor: resolvedName,
+        partyName: resolvedName,
+        vendorName: resolvedName,
+        cashAccountId: r.cashAccountId ? accountMap.get(String(r.cashAccountId?._id || r.cashAccountId)) || r.cashAccountId : null,
+        jobId: r.jobId ? jobMap.get(String(r.jobId?._id || r.jobId)) || r.jobId : null,
+      };
+    });
+
+    populatedRows.sort((a: any, b: any) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
 
     return ok(populatedRows);
   } catch (e) {

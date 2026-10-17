@@ -33,7 +33,10 @@ export default function StaffModal({ isOpen, onClose, staff }: StaffModalProps) 
     eobi: staff?.eobi || "",
     sessi: staff?.sessi || "",
     providentFund: staff?.providentFund || "",
-    basicSalary: staff?.basicSalary || 0,
+    basicSalary: staff?.fixedMonthlySalary || staff?.basicSalary || 0,
+    fixedMonthlySalary: staff?.fixedMonthlySalary || staff?.basicSalary || 0,
+    openingLoanBalance: staff?.openingLoanBalance || 0,
+    monthlyInstallment: staff?.monthlyInstallment || 0,
   });
 
   const [allowances, setAllowances] = useState([{ id: "1", name: "", amount: 0 }]);
@@ -227,9 +230,22 @@ export default function StaffModal({ isOpen, onClose, staff }: StaffModalProps) 
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-widest">Salary Structure</h3>
           </div>
           <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Basic Salary *</label>
-              <input type="number" value={formData.basicSalary} onChange={(e) => setFormData({...formData, basicSalary: parseFloat(e.target.value) || 0})} className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-black focus:ring-2 focus:ring-maroon-800/20" required />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Fixed Monthly Salary (Rs.) *</label>
+                <input type="number" value={formData.fixedMonthlySalary} onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  setFormData({...formData, fixedMonthlySalary: val, basicSalary: val});
+                }} className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-black focus:ring-2 focus:ring-maroon-800/20" required />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Opening Loan Balance (Rs.)</label>
+                <input type="number" value={formData.openingLoanBalance} onChange={(e) => setFormData({...formData, openingLoanBalance: parseFloat(e.target.value) || 0})} className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-black focus:ring-2 focus:ring-maroon-800/20" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Monthly Loan Installment (Rs.)</label>
+                <input type="number" value={formData.monthlyInstallment} onChange={(e) => setFormData({...formData, monthlyInstallment: parseFloat(e.target.value) || 0})} className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-black focus:ring-2 focus:ring-maroon-800/20" />
+              </div>
             </div>
             
             <div className="space-y-2 mt-4">
