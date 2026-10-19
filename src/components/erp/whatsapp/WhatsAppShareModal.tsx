@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Phone, MessageCircle, FileText, CheckCircle, AlertTriangle, RefreshCw, Download, Printer } from "lucide-react";
+import { X, Send, Phone, MessageCircle, FileText, CheckCircle, AlertTriangle, RefreshCw, Download, Printer, Copy } from "lucide-react";
 import html2canvas from "html2canvas";
 
 interface WhatsAppShareModalProps {
@@ -14,6 +14,124 @@ interface WhatsAppShareModalProps {
   shopProfile?: any;
 }
 
+export function buildWhatsAppMessage({
+  shopName,
+  type,
+  party,
+  documentData
+}: {
+  shopName: string;
+  type: string;
+  party: any;
+  documentData: any;
+}) {
+  const isVendor = 
+    party?.type === "Vendor" || 
+    Boolean(documentData?.vendorName) || 
+    (documentData?.type && String(documentData.type).toLowerCase().includes("purchase"));
+
+  const partyLabel = isVendor ? "Vendor" : "Customer";
+  const partyName = party?.name || party?.companyName || documentData?.customerName || documentData?.vendorName || (isVendor ? "Valued Vendor" : "Valued Customer");
+  const docDate = documentData?.date ? new Date(documentData.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+
+  let title = "INVOICE";
+  if (type === "Invoice") {
+    title = isVendor ? "PURCHASE BILL" : "SALE INVOICE";
+  } else if (type === "Receipt") {
+    title = isVendor ? "PAYMENT VOUCHER" : "PAYMENT RECEIPT";
+  } else if (type === "Statement") {
+    title = "ACCOUNT STATEMENT";
+  } else if (type === "Reminder") {
+    title = "PAYMENT REMINDER";
+  }
+
+  const docNo = documentData?.invoiceNo || documentData?.dcNo || documentData?.receiptNumber || documentData?.voucherNo || "-";
+
+  const lines: string[] = [];
+  lines.push(`*${shopName.toUpperCase()}*`);
+  lines.push(`----------------------------------------`);
+  lines.push(`*${title}*`);
+  lines.push(`----------------------------------------`);
+  if (docNo && docNo !== "-") lines.push(`*Doc #:* ${docNo}`);
+  lines.push(`*Date:* ${docDate}`);
+  lines.push(`*${partyLabel}:* ${partyName}`);
+
+  const items = documentData?.rows || documentData?.lines || documentData?.items || [];
+  if (items.length > 0) {
+    lines.push(`----------------------------------------`);
+    lines.push(`*ITEMS:*`);
+    items.forEach((item: any, idx: number) => {
+      const name = item.description || item.itemName || item.name || `Item ${idx + 1}`;
+      let qtyParts: string[] = [];
+      if (Number(item.cartons) > 0) qtyParts.push(`${item.cartons} Ctn`);
+      if (Number(item.liters) > 0) qtyParts.push(`${item.liters} Ltr`);
+      if (Number(item.gallons) > 0) qtyParts.push(`${item.gallons} Gal`);
+      if (qtyParts.length === 0) qtyParts.push(`${item.qty || 1} Qty`);
+
+      const qtyStr = qtyParts.join(" / ");
+      const rate = Number(item.rate || item.unitPrice || item.ratePerCtn || 0);
+      const amt = Number(item.netAmount || item.total || (item.grossAmount - (item.discount || 0)) || (rate * (Number(item.cartons) || Number(item.qty) || 1)));
+      
+      lines.push(`${idx + 1}. *${name}*`);
+      lines.push(`   ${qtyStr} @ Rs. ${Math.round(rate).toLocaleString()} = Rs. ${Math.round(amt).toLocaleString()}`);
+    });
+  }
+
+  const grandTotal = Number(documentData?.totalAmount || documentData?.total || documentData?.grandTotal || documentData?.amount || 0);
+  const subTotal = Number(documentData?.subTotal || documentData?.grossAmount || 0);
+  const discount = Number(documentData?.discountAmount || documentData?.discount || 0);
+  const tax = Number(documentData?.taxAmount || 0);
+  const paid = Number(documentData?.amountReceived || documentData?.amountPaid || 0);
+  const thisDue = Math.max(0, grandTotal - paid);
+
+  let prevBal = 0;
+  if (documentData?.previousBalance !== undefined && documentData?.previousBalance !== null) {
+    prevBal = Number(documentData.previousBalance) || 0;
+  } else if (party?.balance !== undefined && party?.balance !== null) {
+    prevBal = Number(party.balance) - thisDue;
+  }
+
+  const totalBal = (prevBal > 0 ? prevBal : 0) + thisDue;
+  const advance = documentData?.availableAdvance !== undefined && documentData?.availableAdvance !== null
+    ? Number(documentData.availableAdvance)
+    : (party?.availableAdvance || (party?.balance < 0 ? Math.abs(party.balance) : 0));
+
+  lines.push(`----------------------------------------`);
+  if (subTotal > 0 && Math.round(subTotal) !== Math.round(grandTotal)) {
+    lines.push(`*Subtotal:* Rs. ${Math.round(subTotal).toLocaleString()}`);
+  }
+  if (discount > 0) {
+    lines.push(`*Discount:* Rs. ${Math.round(discount).toLocaleString()}`);
+  }
+  if (tax > 0) {
+    lines.push(`*Tax:* Rs. ${Math.round(tax).toLocaleString()}`);
+  }
+  lines.push(`*Total Amount:* Rs. ${Math.round(grandTotal).toLocaleString()}`);
+  if (paid > 0) {
+    lines.push(`*Amount Paid:* Rs. ${Math.round(paid).toLocaleString()}`);
+  }
+  if (thisDue > 0 && paid > 0) {
+    lines.push(`*This Bill Due:* Rs. ${Math.round(thisDue).toLocaleString()}`);
+  }
+
+  if (prevBal > 0) {
+    lines.push(`*Previous Udhaar:* Rs. ${Math.round(prevBal).toLocaleString()}`);
+    lines.push(`*Total Balance Due:* Rs. ${Math.round(totalBal).toLocaleString()}`);
+  } else if (party?.balance !== undefined && !isVendor) {
+    lines.push(`*Net Balance Due:* Rs. ${Math.round(Math.max(0, Number(party.balance))).toLocaleString()}`);
+  }
+
+  if (advance > 0) {
+    lines.push(`*Available Advance:* Rs. ${Math.round(advance).toLocaleString()}`);
+  }
+
+  lines.push(`----------------------------------------`);
+  lines.push(`Thank you for your business!`);
+  lines.push(`*${shopName}*`);
+
+  return lines.join("\n");
+}
+
 export default function WhatsAppShareModal({
   isOpen,
   onClose,
@@ -23,10 +141,10 @@ export default function WhatsAppShareModal({
   documentData,
   shopProfile
 }: WhatsAppShareModalProps) {
-  const [phone, setPhone] = useState(party?.phone || party?.mobile || "");
+  const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [previewImg, setPreviewImg] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -34,70 +152,41 @@ export default function WhatsAppShareModal({
   
   const printRef = useRef<HTMLDivElement>(null);
 
-  // Auto-generate default message and handle image generation on open
+  // Auto-generate detailed message on open
   useEffect(() => {
     if (isOpen) {
-      setPhone(party?.phone || party?.mobile || "");
+      const initialPhone = 
+        party?.phone || 
+        party?.mobile || 
+        documentData?.customerPhone || 
+        documentData?.vendorPhone || 
+        documentData?.phone || 
+        "";
+      
+      setPhone(initialPhone);
       setStatus("idle");
       setErrorMessage("");
       setPreviewImg(null);
-      setIsGenerating(true);
       setCopySuccess(false);
       
-      const customerName = party?.name || party?.companyName || party?.vendor || "Customer";
       const shopName = shopProfile?.companyName || "AL HADEED TRADERS";
-      
-      let docNo = "-";
-      let amountVal = 0;
+      const generated = buildWhatsAppMessage({
+        shopName,
+        type,
+        party,
+        documentData
+      });
 
-      if (type === "Invoice" && documentData) {
-        docNo = documentData.invoiceNo || documentData.dcNo || documentData.voucherNo || "-";
-        amountVal = documentData.grandTotal || documentData.totalAmount || documentData.total || documentData.amount || 0;
-      } else if (type === "Receipt" && documentData) {
-        docNo = documentData.receiptNumber || documentData.voucherNo || "-";
-        amountVal = documentData.amount || 0;
-      } else if (type === "Statement" && documentData) {
-        docNo = "Statement";
-        amountVal = documentData.closing !== undefined ? documentData.closing : (party?.balance || 0);
-      } else if (type === "Reminder" && documentData) {
-        docNo = "Outstanding Dues";
-        amountVal = documentData.closing !== undefined ? documentData.closing : (party?.balance || 0);
-      } else {
-        amountVal = party?.balance || 0;
-      }
-
-      // Format template as requested by the user
-      const template = `Assalam O Alaikum,
-
-Please find attached invoice from
-${shopName}.
-
-Invoice No: ${docNo}
-
-Amount:
-PKR ${Math.round(amountVal).toLocaleString()}
-
-Thank you.`;
-
-      setMessage(template);
-
-      // Trigger html2canvas generation after a brief delay to allow the offscreen elements to fully render
-      const timer = setTimeout(() => {
-        generatePreviewImage();
-      }, 700);
-
-      return () => clearTimeout(timer);
+      setMessage(generated);
     }
   }, [isOpen, party, type, documentData, shopProfile]);
 
   const generatePreviewImage = async () => {
-    if (!printRef.current) {
-      setIsGenerating(false);
-      return;
-    }
+    if (!printRef.current) return;
+    setIsGenerating(true);
     try {
       const canvas = await html2canvas(printRef.current, {
-        scale: 2, // High resolution (HD)
+        scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: "#ffffff",
@@ -107,10 +196,18 @@ Thank you.`;
       setPreviewImg(pngUrl);
     } catch (err) {
       console.error("Image generation failed", err);
-      setErrorMessage("Could not generate invoice preview image.");
-      setStatus("error");
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleCopyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2500);
+    } catch (err) {
+      console.error("Copy failed", err);
     }
   };
 
@@ -156,19 +253,7 @@ Thank you.`;
     }
   };
 
-  const dataURLtoBlob = (dataurl: string) => {
-    const arr = dataurl.split(",");
-    const mime = arr[0].match(/:(.*?);/)![1];
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new Blob([u8arr], { type: mime });
-  };
-
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!phone) {
       setErrorMessage("Please enter a valid WhatsApp number.");
       setStatus("error");
@@ -188,59 +273,16 @@ Thank you.`;
         cleanPhone = "92" + cleanPhone;
       }
 
-      // Check if client is mobile
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
       const encodedMsg = encodeURIComponent(message);
-
-      if (isMobile && previewImg) {
-        // Try Web Share API on mobile to attach image directly
-        const blob = dataURLtoBlob(previewImg);
-        const file = new File([blob], "invoice.png", { type: "image/png" });
-        
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: "Invoice Share",
-            text: message
-          });
-          setStatus("success");
-          setTimeout(() => onClose(), 2000);
-          setIsSending(false);
-          return;
-        }
-      }
-
-      // Desktop Flow or Mobile Share sheet fallback
-      if (previewImg) {
-        try {
-          const blob = dataURLtoBlob(previewImg);
-          const item = new ClipboardItem({ "image/png": blob });
-          await navigator.clipboard.write([item]);
-          setCopySuccess(true);
-        } catch (clipErr) {
-          console.error("Clipboard write error:", clipErr);
-        }
-      }
-
-      // Deep link directly into WhatsApp App on both laptop (WhatsApp Desktop app) and mobile devices
-      const appUrl = `whatsapp://send?phone=${cleanPhone}&text=${encodedMsg}`;
-      const webUrl = `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
-
-      // Open WhatsApp app protocol directly
-      window.location.href = appUrl;
       
-      // Fallback: If desktop app isn't registered, open web after brief delay
-      setTimeout(() => {
-        if (!document.hidden) {
-          window.open(webUrl, "erp_whatsapp_window");
-        }
-      }, 1500);
-      
+      // WhatsApp direct URL (works on both mobile app and desktop browser)
+      const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
+
+      window.open(waUrl, "_blank");
       setStatus("success");
       setTimeout(() => {
         onClose();
-      }, 3500);
+      }, 1500);
     } catch (e: any) {
       setStatus("error");
       setErrorMessage(e.message || "An error occurred while sending.");
@@ -251,24 +293,22 @@ Thank you.`;
 
   if (!isOpen) return null;
 
-  // Extract items for renderer safely
-  const docItems = documentData?.rows || documentData?.lines || documentData?.items || [];
-  const customerName = party?.name || party?.companyName || party?.vendor || "Walk-in Cash Customer";
-  const customerPhone = party?.phone || party?.mobile || "-";
+  const customerName = party?.name || party?.companyName || party?.vendor || documentData?.customerName || documentData?.vendorName || "Valued Customer";
+  const customerPhone = party?.phone || party?.mobile || documentData?.customerPhone || documentData?.vendorPhone || "-";
   const customerAddress = party?.address || "-";
   const shopName = shopProfile?.companyName || "AL HADEED TRADERS";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col max-h-[92vh]">
         
         {/* Header */}
         <div className="bg-[#25D366] p-5 text-white flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
-            <MessageCircle size={24} className="fill-white/20 animate-pulse" />
+            <MessageCircle size={26} className="fill-white/20 animate-pulse" />
             <div>
-              <h3 className="font-black text-lg">Invoice Preview</h3>
-              <p className="text-white/80 text-xs font-bold">Share HD image to customer</p>
+              <h3 className="font-black text-lg">Send Bill via WhatsApp</h3>
+              <p className="text-white/80 text-xs font-bold">Fast formatted text message directly to WhatsApp</p>
             </div>
           </div>
           <button onClick={onClose} className="text-white/80 hover:text-white transition-colors bg-black/10 hover:bg-black/20 p-2 rounded-full">
@@ -279,52 +319,63 @@ Thank you.`;
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-950">
           
-          {/* Left Side: Invoice Preview Render */}
-          <div className="flex flex-col justify-center items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm min-h-[300px] relative overflow-hidden">
-            {isGenerating ? (
-              <div className="flex flex-col items-center gap-3 py-12">
-                <RefreshCw size={36} className="animate-spin text-[#25D366]" />
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-widest animate-pulse">Generating High Quality Image...</p>
-              </div>
-            ) : previewImg ? (
-              <div className="w-full h-full flex flex-col justify-between items-center">
-                <div className="w-full overflow-y-auto border border-slate-100 rounded-lg max-h-[50vh] scrollbar-thin">
-                  <img src={previewImg} alt="Invoice Preview" className="w-full h-auto object-contain" />
-                </div>
-                <div className="flex gap-2 w-full mt-4 justify-center">
+          {/* Left Side: Live Formatted Message Preview */}
+          <div className="flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Message Preview</span>
+              <button
+                onClick={handleCopyMessage}
+                className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg transition-all"
+              >
+                <Copy size={13} />
+                {copySuccess ? "Copied!" : "Copy Text"}
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3.5 bg-[#EFEAE2] dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 font-mono text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed select-text max-h-[50vh] shadow-inner">
+              {message}
+            </div>
+
+            <div className="flex gap-2 w-full mt-3 justify-end">
+              {!previewImg && !isGenerating && (
+                <button 
+                  onClick={generatePreviewImage} 
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white text-[11px] font-bold rounded-lg transition-all"
+                >
+                  Generate Image Slip
+                </button>
+              )}
+              {isGenerating && (
+                <span className="text-xs text-slate-400 font-bold flex items-center gap-1">
+                  <RefreshCw size={12} className="animate-spin" /> Generating slip...
+                </span>
+              )}
+              {previewImg && (
+                <>
                   <button 
                     onClick={handleDownload} 
-                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white text-xs font-black rounded-lg transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-white text-xs font-bold rounded-lg transition-all"
                   >
-                    <Download size={14} /> Download PNG
+                    <Download size={13} /> PNG
                   </button>
                   <button 
                     onClick={handlePrint}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white text-xs font-black rounded-lg transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-white text-xs font-bold rounded-lg transition-all"
                   >
-                    <Printer size={14} /> Print
+                    <Printer size={13} /> Print
                   </button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-red-500 font-bold">Failed to load preview.</p>
-            )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* Right Side: Message & Target Input */}
           <div className="flex flex-col justify-between space-y-4">
             
             {status === "success" && (
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 p-4 rounded-xl flex flex-col gap-1 border border-emerald-100 dark:border-emerald-900/30">
-                <div className="flex items-center gap-2">
-                  <CheckCircle size={18} className="shrink-0" />
-                  <p className="text-xs font-extrabold uppercase tracking-wider">Session Initialized!</p>
-                </div>
-                {copySuccess && (
-                  <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold ml-6">
-                    Image copied to clipboard! Paste it using <kbd className="bg-emerald-100 dark:bg-emerald-800 px-1 py-0.5 rounded font-black text-xs">Ctrl+V</kbd> inside the opened WhatsApp chat.
-                  </p>
-                )}
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 p-4 rounded-xl flex items-center gap-2 border border-emerald-100 dark:border-emerald-900/30">
+                <CheckCircle size={18} className="shrink-0" />
+                <p className="text-xs font-extrabold uppercase tracking-wider">WhatsApp opened successfully!</p>
               </div>
             )}
 
@@ -335,56 +386,51 @@ Thank you.`;
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="space-y-4 flex-1">
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                  <Phone size={12} /> Recipient Phone (WhatsApp)
+                  <Phone size={12} /> Recipient WhatsApp Number
                 </label>
                 <input 
                   type="text" 
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g. +923001234567"
+                  placeholder="e.g. 03001234567 or 923001234567"
                   className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold focus:outline-none focus:border-[#25D366] transition-all dark:text-white"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                  <FileText size={12} /> WhatsApp Text Message
+                  <FileText size={12} /> Edit Message Text (if needed)
                 </label>
                 <textarea 
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   rows={8}
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:outline-none focus:border-[#25D366] transition-all dark:text-white leading-relaxed"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:outline-none focus:border-[#25D366] transition-all dark:text-white leading-relaxed font-mono"
                 />
               </div>
             </div>
 
-            {/* Hint for Clipboard Paste on Desktop */}
-            <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 font-bold leading-normal">
-              <p className="font-extrabold text-slate-700 dark:text-slate-350 uppercase tracking-widest mb-1">💡 Sharing Guidelines</p>
-              <ul className="list-disc pl-4 space-y-0.5">
-                <li>On mobile, you can send the PNG image directly using the system share menu.</li>
-                <li>On desktop, clicking &quot;Send&quot; automatically copies the image to your clipboard. Simply press <kbd className="bg-slate-200 dark:bg-slate-800 px-1 rounded">Ctrl+V</kbd> inside the WhatsApp chat to attach the image.</li>
-              </ul>
+            <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 text-[11px] text-emerald-800 dark:text-emerald-300 font-bold leading-normal">
+              💬 Clicking &quot;Send to WhatsApp&quot; will open WhatsApp with this complete bill message pre-filled and ready to send.
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
               <button 
                 onClick={onClose}
-                className="px-6 py-2.5 text-xs font-black text-slate-500 hover:bg-slate-200 rounded-xl transition-all"
+                className="px-6 py-2.5 text-xs font-black text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleSend}
-                disabled={isSending || isGenerating}
+                disabled={isSending}
                 className="flex items-center gap-2 px-8 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-black shadow-lg shadow-[#25D366]/30 transition-all disabled:opacity-50"
               >
                 {isSending ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                {isSending ? "Sending..." : "Send to WhatsApp"}
+                {isSending ? "Opening..." : "Send to WhatsApp"}
               </button>
             </div>
 
@@ -392,12 +438,10 @@ Thank you.`;
         </div>
       </div>
 
-      {/* Hidden Document Render Container (A4 layout rendered off-screen) */}
+      {/* Hidden Document Render Container (for optional PNG slip generation) */}
       <div className="fixed top-0 left-0 -z-50 opacity-0 pointer-events-none" style={{ position: "absolute", left: "-9999px" }}>
         <div ref={printRef} className="w-[794px] bg-white p-10 text-black font-sans leading-normal flex flex-col justify-between" style={{ minHeight: "1123px" }}>
-          
           <div>
-            {/* Header */}
             <div className="flex justify-between items-start border-b-2 border-slate-300 pb-4 mb-6">
               <div>
                 <h1 className="text-2xl font-black uppercase tracking-tight text-[#800000]">{shopName}</h1>
@@ -418,179 +462,17 @@ Thank you.`;
                   <span className="text-slate-800 text-right">
                     {documentData?.date ? new Date(documentData.date).toLocaleDateString() : new Date().toLocaleDateString()}
                   </span>
-                  <span className="text-slate-400">Method:</span>
-                  <span className="text-slate-800 text-right uppercase">
-                    {documentData?.paymentMethod || "Credit"}
-                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Bill To */}
             <div className="border border-slate-200 p-3 rounded-lg flex flex-col justify-start mb-6">
               <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1">Billed To</h3>
               <p className="font-extrabold text-sm text-slate-900">{customerName}</p>
               <p className="text-xs text-slate-500 font-bold">Phone: {customerPhone}</p>
               <p className="text-xs text-slate-400 font-bold mt-0.5">Address: {customerAddress}</p>
             </div>
-
-            {/* Table Content Section */}
-            {type === "Statement" || type === "Reminder" ? (
-              // Ledger / Statement Table
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-slate-400 text-xs font-black uppercase tracking-wider text-slate-600 bg-slate-50">
-                    <th className="py-2 px-3">Date</th>
-                    <th className="py-2 px-3">Doc No</th>
-                    <th className="py-2 px-3">Description</th>
-                    <th className="py-2 px-3 text-right">Debit (PKR)</th>
-                    <th className="py-2 px-3 text-right">Credit (PKR)</th>
-                    <th className="py-2 px-3 text-right">Balance</th>
-                  </tr>
-                </thead>
-                <tbody className="text-xs font-bold text-slate-800 divide-y divide-slate-100">
-                  <tr className="bg-slate-50/50 font-black">
-                    <td className="py-2 px-3">-</td>
-                    <td className="py-2 px-3">-</td>
-                    <td className="py-2 px-3 uppercase tracking-tighter text-slate-400">Opening Balance</td>
-                    <td className="py-2 px-3 text-right">-</td>
-                    <td className="py-2 px-3 text-right">-</td>
-                    <td className="py-2 px-3 text-right">PKR {(documentData?.opening || 0).toLocaleString()}</td>
-                  </tr>
-                  {documentData?.rows?.map((row: any, i: number) => (
-                    <tr key={i} className="hover:bg-slate-50/50">
-                      <td className="py-2 px-3">{new Date(row.date).toLocaleDateString()}</td>
-                      <td className="py-2 px-3 text-blue-600">{row.voucherNo || row.invoiceNo}</td>
-                      <td className="py-2 px-3">{row.remarks || row.type}</td>
-                      <td className="py-2 px-3 text-right text-emerald-700">
-                        {row.debit > 0 ? row.debit.toLocaleString() : "-"}
-                      </td>
-                      <td className="py-2 px-3 text-right text-rose-700">
-                        {row.credit > 0 ? row.credit.toLocaleString() : "-"}
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        PKR {row.runningBalance?.toLocaleString() || row.balance?.toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-300">
-                    <td colSpan={3} className="py-2 px-3 text-right uppercase text-[10px]">Total Summary</td>
-                    <td className="py-2 px-3 text-right text-emerald-700">{(documentData?.totalDr || 0).toLocaleString()}</td>
-                    <td className="py-2 px-3 text-right text-rose-700">{(documentData?.totalCr || 0).toLocaleString()}</td>
-                    <td className="py-2 px-3 text-right text-[#800000] text-sm">
-                      PKR {(documentData?.closing || 0).toLocaleString()}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            ) : type === "Receipt" ? (
-              // Receipt Payment Details
-              <div className="border border-slate-200 rounded-xl p-5 space-y-4 bg-slate-50">
-                <div className="flex justify-between border-b pb-2">
-                  <span className="text-sm font-bold text-slate-500">Transaction Date:</span>
-                  <span className="text-sm font-black text-slate-800">
-                    {documentData?.date ? new Date(documentData.date).toLocaleDateString() : new Date().toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="flex justify-between border-b pb-2">
-                  <span className="text-sm font-bold text-slate-500">Receipt Voucher:</span>
-                  <span className="text-sm font-black text-[#800000]">{documentData?.receiptNumber || "-"}</span>
-                </div>
-                <div className="flex justify-between border-b pb-2">
-                  <span className="text-sm font-bold text-slate-500">Amount Received:</span>
-                  <span className="text-lg font-black text-emerald-600">PKR {(documentData?.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
-                {documentData?.notes && (
-                  <div className="pt-2">
-                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest block mb-1">Remarks / Narration:</span>
-                    <p className="text-xs text-slate-700 leading-normal">{documentData.notes}</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              // Generic Item Table (Invoice)
-              <>
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-slate-350 text-xs font-black text-slate-450 uppercase tracking-wider bg-slate-50">
-                      <th className="py-2 px-2 text-left w-8">#</th>
-                      <th className="py-2 px-2 text-left">Description</th>
-                      <th className="py-2 px-2 text-center w-16">Qty</th>
-                      <th className="py-2 px-2 text-right w-24">Price/Unit</th>
-                      <th className="py-2 px-2 text-right w-24">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
-                    {docItems.map((item: any, i: number) => {
-                      const desc = item.description || item.itemName || item.accountName || "Product/Item";
-                      const qty = item.qty || item.cartons || 1;
-                      const price = Number(item.unitPrice || item.rate || item.amount || 0);
-                      const total = Number(item.total || item.amount || item.netAmount || 0);
-
-                      return (
-                        <tr key={i} className="hover:bg-slate-50/50">
-                          <td className="py-2 px-2 text-slate-400">{i + 1}</td>
-                          <td className="py-2 px-2 text-slate-800 font-black">{desc}</td>
-                          <td className="py-2 px-2 text-center">{qty}</td>
-                          <td className="py-2 px-2 text-right">PKR {price.toLocaleString()}</td>
-                          <td className="py-2 px-2 text-right text-slate-900 font-black">PKR {total.toLocaleString()}</td>
-                        </tr>
-                      );
-                    })}
-                    {docItems.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="py-8 text-center text-slate-400 italic">No items attached.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-
-                {/* Subtotals & Signatures */}
-                <div className="grid grid-cols-12 gap-6 mt-8 pt-4 border-t border-slate-200">
-                  <div className="col-span-7 flex flex-col justify-between">
-                    <div className="text-[10px] text-slate-500 font-bold leading-relaxed">
-                      <p className="font-extrabold text-slate-700 mb-1">Notes / Terms:</p>
-                      <p>1. Goods once sold are only returnable within 7 days in original condition.</p>
-                      <p>2. Payment should be completed as per agreed credit terms.</p>
-                      {documentData?.notes && <p className="mt-2 text-[#800000] font-black">Remarks: {documentData.notes}</p>}
-                    </div>
-                  </div>
-                  <div className="col-span-5 border border-slate-200 rounded-xl p-3 bg-slate-50 text-xs font-bold space-y-2 text-slate-600">
-                    <div className="flex justify-between">
-                      <span>Gross Total:</span>
-                      <span className="text-slate-800">PKR {Math.round(documentData?.subTotal || documentData?.totalAmount || 0).toLocaleString()}</span>
-                    </div>
-                    {documentData?.discountAmount > 0 && (
-                      <div className="flex justify-between">
-                        <span>Discount:</span>
-                        <span className="text-rose-600">-PKR {Math.round(documentData.discountAmount).toLocaleString()}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm font-black pt-2 border-t border-slate-300 text-slate-950 uppercase">
-                      <span>Net Total:</span>
-                      <span className="text-[#800000]">PKR {Math.round(documentData?.totalAmount || documentData?.total || documentData?.amount || 0).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
           </div>
-
-          {/* Footer signatures */}
-          <div className="mt-16 flex justify-between items-end border-t border-slate-200 pt-6">
-            <div>
-              <div className="w-36 border-b border-slate-300 mb-1"></div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Customer Signature</p>
-            </div>
-            <div className="text-center text-[10px] font-black uppercase text-slate-400">
-              * Thank you for your business *
-            </div>
-            <div className="text-right">
-              <div className="w-36 border-b border-slate-300 mb-1 ml-auto"></div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Authorized Signature</p>
-            </div>
-          </div>
-
         </div>
       </div>
     </div>

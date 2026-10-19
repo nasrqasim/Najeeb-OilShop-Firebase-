@@ -117,11 +117,13 @@ export default function InventoryLedgerReportPage() {
   });
 
   const itemsWithOpening = useMemo(() => {
-    const startRange = fromDate ? new Date(fromDate) : new Date("2000-01-01");
+    const startRange = fromDate ? new Date(fromDate) : null;
     
     return filteredItems.map(item => {
-      let qtyIn = 0;
-      let qtyOut = 0;
+      let qtyInPeriod = 0;
+      let qtyOutPeriod = 0;
+      let qtyInPrior = 0;
+      let qtyOutPrior = 0;
       
       const IN_TYPES = new Set([
         "purchase", "import_purchase", "non_tax_purchase", "sale_return", "non_tax_sale_return", "add_stock", "grn"
@@ -130,10 +132,13 @@ export default function InventoryLedgerReportPage() {
         "sale", "non_tax_sale", "pos", "pos_counter_sale", "purchase_return", "non_tax_purchase_return", "reduce_stock", "challan"
       ]);
       
+      const lInCtn = Number(item.litersInCtn) || 0;
+      const gInCtn = Number(item.gallonsInCtn) || 0;
+
       invoices.forEach((inv: any) => {
         if (inv.status === "cancelled" || inv.status === "Cancelled") return;
         const invDate = new Date(inv.date || inv.createdAt);
-        if (invDate < startRange) return;
+        const isPrior = startRange ? invDate < startRange : false;
         
         const invType = String(inv.type || "");
         const isIn = IN_TYPES.has(invType);
@@ -144,26 +149,36 @@ export default function InventoryLedgerReportPage() {
           const lineItemId = line.itemId?._id || line.itemId;
           if (String(lineItemId) !== String(item._id)) return;
           
-          let qty = lineStockQty(line);
+          let qty = Number(line.cartons) || 0;
           if (qty <= 0) {
             const liters = Number(line.liters) || 0;
             const gallons = Number(line.gallons) || 0;
-            if (liters > 0) qty = liters;
-            else if (gallons > 0) qty = gallons;
+            if (liters > 0 && lInCtn > 0) qty = liters / lInCtn;
+            else if (gallons > 0 && gInCtn > 0) qty = gallons / gInCtn;
+            else qty = Number(line.qty) || 0;
           }
+
           if (qty > 0) {
-            if (isIn) qtyIn += qty;
-            if (isOut) qtyOut += qty;
+            if (isPrior) {
+              if (isIn) qtyInPrior += qty;
+              if (isOut) qtyOutPrior += qty;
+            } else {
+              if (isIn) qtyInPeriod += qty;
+              if (isOut) qtyOutPeriod += qty;
+            }
           }
         });
       });
       
-      const closing = item.stockQtyCartons || 0;
-      const opening = Math.max(0, closing - qtyIn + qtyOut);
+      // Original inception opening stock
+      const inceptionOpening = Number(item.openingStockCartons ?? item.openingStock ?? item.stockQtyCartons ?? 0);
+      const opening = Math.max(0, inceptionOpening + qtyInPrior - qtyOutPrior);
+      const closing = Math.max(0, opening + qtyInPeriod - qtyOutPeriod);
       
       return {
         ...item,
-        openingStock: opening
+        openingStock: opening,
+        stockQtyCartons: closing
       };
     });
   }, [filteredItems, invoices, fromDate]);

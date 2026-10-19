@@ -28,14 +28,15 @@ export async function GET(req: Request) {
     const dateParam = searchParams.get("date");
     const targetDateStr = dateParam ? dateParam.slice(0, 10) : new Date().toISOString().slice(0, 10);
 
-    const [allParties, allInvoices, allCR, allCP, allBR, allBP, allItems] = await Promise.all([
+    const [allParties, allInvoices, allCR, allCP, allBR, allBP, allItems, allOtherIncomes] = await Promise.all([
       getAllParties(),
       getAllInvoices(),
       getAllCashReceipts(),
       getAllCashPayments(),
       getAllBankReceipts(),
       getAllBankPayments(),
-      getAllItems()
+      getAllItems(),
+      getDocuments("other_incomes")
     ]);
 
     const customers = allParties.filter((p: any) => p.type === "Customer");
@@ -153,7 +154,14 @@ export async function GET(req: Request) {
         if (!vendorIds.has(pid) && getDayStr(p.date || p.createdAt) === dStr && p.status !== "Cancelled") otherCashPayments += Number(p.amount) || 0;
       });
 
-      const cbReceipts = recCredits + cashSalesPaid + vendorReceipts;
+      let otherIncomeToday = 0;
+      allOtherIncomes.forEach((inc: any) => {
+        if (getDayStr(inc.date || inc.createdAt) === dStr && inc.status !== "cancelled" && inc.status !== "Cancelled") {
+          otherIncomeToday += Number(inc.amount) || 0;
+        }
+      });
+
+      const cbReceipts = recCredits + cashSalesPaid + vendorReceipts + otherIncomeToday;
       const cbPayments = payDebits + cashPurchasesPaid + otherCashPayments;
 
       return {
@@ -167,7 +175,8 @@ export async function GET(req: Request) {
         payDebits: Math.round(payDebits),
         cbReceipts: Math.round(cbReceipts),
         cbPayments: Math.round(cbPayments),
-        expensesToday: Math.round(otherCashPayments)
+        expensesToday: Math.round(otherCashPayments),
+        otherIncomeToday: Math.round(otherIncomeToday)
       };
     };
 
@@ -223,6 +232,13 @@ export async function GET(req: Request) {
         const pid = String(r.partyId?._id || r.partyId || r.party || "");
         if (customerIds.has(pid)) priorRecCredits += amt;
         priorCbReceipts += amt;
+      }
+    });
+
+    allOtherIncomes.forEach((inc: any) => {
+      const dStr = getDayStr(inc.date || inc.createdAt);
+      if (dStr && dStr < targetDateStr && inc.status !== "cancelled" && inc.status !== "Cancelled") {
+        priorCbReceipts += Number(inc.amount) || 0;
       }
     });
 

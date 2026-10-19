@@ -1,6 +1,5 @@
 import { fail, ok } from "@/lib/api";
-import { getDocuments, getDocumentById } from "@/lib/firestore/genericRepository";
-import { lineStockQty } from "@/lib/itemUnits";
+import { getDocuments, getDocumentById, updateDocument } from "@/lib/firestore/genericRepository";
 
 const IN_TYPES = new Set([
   "purchase",
@@ -41,6 +40,24 @@ function resolveLineItemId(line: { itemId?: unknown }): string {
   return String(id);
 }
 
+function getLineCartonQty(line: any, litersInCtn: number, gallonsInCtn: number): number {
+  const cartons = Number(line.cartons) || 0;
+  if (cartons > 0) return cartons;
+
+  const liters = Number(line.liters) || 0;
+  if (liters > 0 && litersInCtn > 0) {
+    return Number((liters / litersInCtn).toFixed(4));
+  }
+
+  const gallons = Number(line.gallons) || 0;
+  if (gallons > 0 && gallonsInCtn > 0) {
+    return Number((gallons / gallonsInCtn).toFixed(4));
+  }
+
+  const qty = Number(line.qty) || 0;
+  return qty > 0 ? qty : 0;
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -53,9 +70,31 @@ export async function GET(req: Request) {
     const fromDate = from ? parseLocalDate(from) : null;
     const toDate = to ? parseLocalDate(to, true) : null;
 
-    const allInvoices = await getDocuments("invoices");
-    const parties = await getDocuments("parties");
-    const locations = await getDocuments("locations");
+    const itemObj = await getDocumentById("items", itemId);
+    if (!itemObj) return fail("Item not found", 404);
+
+    const gallonsInCtn = Number(itemObj.gallonsInCtn || 0);
+    const litersInCtn = Number(itemObj.litersInCtn || 0);
+    
+    // Immutable original opening balance at item creation
+    let originalOpeningStock = Number(
+      itemObj.openingStockCartons ?? 
+      itemObj.openingStock ?? 
+      itemObj.initialStock ?? 
+      itemObj.stockQtyCartons ?? 
+      0
+    );
+
+    // Ensure openingStockCartons is persisted so it never recalculates or changes
+    if (itemObj.openingStockCartons === undefined) {
+      updateDocument("items", itemId, { openingStockCartons: originalOpeningStock }).catch(console.error);
+    }
+
+    const [allInvoices, parties, locations] = await Promise.all([
+      getDocuments("invoices"),
+      getDocuments("parties"),
+      getDocuments("locations"),
+    ]);
 
     const partyMap = new Map(parties.map((p: any) => [String(p._id), p]));
     const locMap = new Map(locations.map((l: any) => [String(l._id), l.name]));
@@ -68,7 +107,7 @@ export async function GET(req: Request) {
 
     matchingInvoices.sort((a: any, b: any) => new Date(a.date || a.createdAt || 0).getTime() - new Date(b.date || b.createdAt || 0).getTime());
 
-    const rows: Array<{
+    const allTxRows: Array<{
       date: Date;
       refNo: string;
       type: string;
@@ -78,8 +117,27 @@ export async function GET(req: Request) {
       out: number;
       rate: number;
       total: number;
+      balance?: number;
     }> = [];
 
+    // Push original opening balance row at inception
+    const pRate = Number(itemObj?.purchaseRate || 0);
+    const itemCreatedAt = itemObj?.createdAt ? new Date(itemObj.createdAt) : new Date("2024-01-01");
+    if (originalOpeningStock > 0) {
+      allTxRows.push({
+        date: itemCreatedAt,
+        refNo: "Opening",
+        type: "OPENING BALANCE",
+        location: "",
+        partyName: "Opening Stock",
+        in: originalOpeningStock,
+        out: 0,
+        rate: pRate,
+        total: originalOpeningStock * pRate,
+      });
+    }
+
+    // Add each matching transaction
     for (const inv of matchingInvoices) {
       const invType = String(inv.type || "");
       const isIn = IN_TYPES.has(invType);
@@ -95,16 +153,10 @@ export async function GET(req: Request) {
       for (const line of inv.lines || []) {
         if (resolveLineItemId(line) !== itemId) continue;
 
-        let qty = lineStockQty(line);
-        if (qty <= 0) {
-          const liters = Number(line.liters) || 0;
-          const gallons = Number(line.gallons) || 0;
-          if (liters > 0) qty = liters;
-          else if (gallons > 0) qty = gallons;
-          else continue;
-        }
+        const qty = getLineCartonQty(line, litersInCtn, gallonsInCtn);
+        if (qty <= 0) continue;
 
-        rows.push({
+        allTxRows.push({
           date: new Date(inv.date || inv.createdAt || Date.now()),
           refNo: inv.invoiceNo || "",
           type: invType.replace(/_/g, " ").toUpperCase(),
@@ -118,65 +170,47 @@ export async function GET(req: Request) {
       }
     }
 
-    const itemObj = await getDocumentById("items", itemId);
-    const currentStock = itemObj ? Number(itemObj.stockQtyCartons || 0) : 0;
-    const gallonsInCtn = itemObj ? Number(itemObj.gallonsInCtn || 0) : 0;
-    const litersInCtn = itemObj ? Number(itemObj.litersInCtn || 0) : 0;
-
-    const totalInAllTime = rows.reduce((sum, r) => sum + r.in, 0);
-    const totalOutAllTime = rows.reduce((sum, r) => sum + r.out, 0);
-    const initialStock = Math.max(0, currentStock - totalInAllTime + totalOutAllTime);
-
-    if (initialStock > 0) {
-      const itemCreatedAt = itemObj?.createdAt;
-      const openingDate = itemCreatedAt
-        ? new Date(itemCreatedAt)
-        : rows.length > 0
-          ? new Date(rows[0].date)
-          : new Date();
-      const pRate = Number(itemObj?.purchaseRate || 0);
-
-      rows.unshift({
-        date: openingDate,
-        refNo: "Opening",
-        type: "OPENING BALANCE",
-        location: "",
-        partyName: "Opening Balance",
-        in: initialStock,
-        out: 0,
-        rate: pRate,
-        total: initialStock * pRate,
-      });
-    }
-
-    let runningBalance = 0;
-    const rowsWithBalance = rows.map((row) => {
-      runningBalance += row.in - row.out;
-      if (runningBalance < 0) runningBalance = 0;
-      return { ...row, balance: runningBalance };
+    // Sort all rows chronologically (Opening balance always first)
+    allTxRows.sort((a, b) => {
+      if (a.refNo === "Opening") return -1;
+      if (b.refNo === "Opening") return 1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
     });
 
-    let openingBalance = 0;
-    const beforeRows = rowsWithBalance.filter(row => fromDate && new Date(row.date) < fromDate);
-    if (beforeRows.length > 0) {
-      openingBalance = beforeRows[beforeRows.length - 1].balance;
+    // Compute continuous running balance
+    let running = 0;
+    allTxRows.forEach(r => {
+      running += (r.in - r.out);
+      r.balance = Math.max(0, Number(running.toFixed(4)));
+    });
+
+    // Determine Opening Balance for requested date range
+    let periodOpeningBalance = originalOpeningStock;
+    if (fromDate) {
+      const beforeRows = allTxRows.filter(r => new Date(r.date) < fromDate);
+      if (beforeRows.length > 0) {
+        periodOpeningBalance = beforeRows[beforeRows.length - 1].balance || 0;
+      } else {
+        periodOpeningBalance = originalOpeningStock;
+      }
     }
 
-    const periodRows = rowsWithBalance.filter(row => {
-      const rowDate = new Date(row.date);
-      if (fromDate && rowDate < fromDate) return false;
-      if (toDate && rowDate > toDate) return false;
+    // Filter rows for the requested period
+    const periodRows = allTxRows.filter(r => {
+      const d = new Date(r.date);
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
       return true;
     });
 
-    const totalIn = periodRows.filter(r => r.refNo !== "Opening").reduce((s, r) => s + r.in, 0);
-    const totalOut = periodRows.reduce((s, r) => s + r.out, 0);
-    const closingBalance =
-      periodRows.length > 0 ? periodRows[periodRows.length - 1].balance : openingBalance;
+    // Summary calculations: Closing = Opening + Total In - Total Out
+    const totalIn = Number(periodRows.filter(r => r.refNo !== "Opening").reduce((s, r) => s + r.in, 0).toFixed(4));
+    const totalOut = Number(periodRows.reduce((s, r) => s + r.out, 0).toFixed(4));
+    const closingBalance = Math.max(0, Number((periodOpeningBalance + totalIn - totalOut).toFixed(4)));
 
     return ok({
       rows: periodRows,
-      openingBalance: initialStock,
+      openingBalance: periodOpeningBalance,
       totalIn,
       totalOut,
       closingBalance,

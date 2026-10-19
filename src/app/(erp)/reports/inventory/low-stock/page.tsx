@@ -53,15 +53,17 @@ export default function LowStockAlertReportPage() {
 
   // 1. First calculate full items with category names and stock status
   const mappedItems = items.map(item => {
-    const stock = item.stockQtyCartons || 0;
-    const reorder = item.reorderLevel || 0;
-    const safety = Math.floor(reorder * 0.5); // Placeholder safety stock
+    const stock = Number(item.stockQtyCartons || 0);
+    const reorder = Number(item.reorderLevel || 0);
+    const safety = Math.floor(reorder * 0.5);
     const gap = stock - reorder;
     
-    let status = "Adequate";
-    if (stock === 0) status = "Out of Stock";
-    else if (stock <= reorder) status = "Critical";
+    let status = "In Stock";
+    if (stock < 0) status = "Negative Stock";
+    else if (stock === 0) status = "Out of Stock";
+    else if (stock <= reorder) status = "Low Stock";
     else if (stock <= reorder * 1.2) status = "Warning";
+    else status = "In Stock";
 
     const mainCategory = categoryMap.get(item.mainCategoryId);
     const subCategory = categoryMap.get(item.subCategoryId);
@@ -91,9 +93,10 @@ export default function LowStockAlertReportPage() {
 
     // Alert Level filter
     if (selectedLevel !== "All") {
+      if (selectedLevel === "Negative Stock" && item.status !== "Negative Stock") return false;
       if (selectedLevel === "Out of Stock" && item.status !== "Out of Stock") return false;
-      if (selectedLevel === "Below Reorder" && item.status !== "Critical") return false;
-      if (selectedLevel === "Safety Stock Warning" && item.status !== "Warning") return false;
+      if (selectedLevel === "Low Stock" && item.status !== "Low Stock") return false;
+      if (selectedLevel === "Available" && item.status !== "In Stock" && item.status !== "Warning") return false;
     }
 
     // Date Filter (show items updated/created on or before selected date)
@@ -170,9 +173,10 @@ export default function LowStockAlertReportPage() {
             className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20 dark:text-white"
           >
             <option value="All">All Levels</option>
+            <option value="Low Stock">Low Stock</option>
             <option value="Out of Stock">Out of Stock</option>
-            <option value="Below Reorder">Below Reorder</option>
-            <option value="Safety Stock Warning">Safety Stock Warning</option>
+            <option value="Available">Available / In Stock</option>
+            <option value="Negative Stock">Negative Stock</option>
           </select>
         </div>
         <div className="space-y-1">
@@ -232,10 +236,10 @@ export default function LowStockAlertReportPage() {
   );
 
   const pieData = [
-    { name: 'Critical', value: items.filter(i => i.stockQtyCartons > 0 && i.stockQtyCartons <= i.reorderLevel).length, color: '#e11d48' },
-    { name: 'Warning', value: items.filter(i => i.stockQtyCartons > i.reorderLevel && i.stockQtyCartons <= i.reorderLevel * 1.2).length, color: '#f59e0b' },
-    { name: 'Adequate', value: items.filter(i => i.stockQtyCartons > i.reorderLevel * 1.2).length, color: '#10b981' },
-    { name: 'Out of Stock', value: items.filter(i => i.stockQtyCartons === 0).length, color: '#000000' },
+    { name: 'Negative Stock', value: items.filter(i => Number(i.stockQtyCartons || 0) < 0).length, color: '#e11d48' },
+    { name: 'Out of Stock', value: items.filter(i => Number(i.stockQtyCartons || 0) === 0).length, color: '#0f172a' },
+    { name: 'Low Stock', value: items.filter(i => Number(i.stockQtyCartons || 0) > 0 && Number(i.stockQtyCartons || 0) <= Number(i.reorderLevel || 0)).length, color: '#f59e0b' },
+    { name: 'In Stock', value: items.filter(i => Number(i.stockQtyCartons || 0) > Number(i.reorderLevel || 0)).length, color: '#10b981' },
   ].filter(d => d.value > 0);
 
   return (
@@ -303,9 +307,10 @@ export default function LowStockAlertReportPage() {
                           <td className={`px-4 py-3 text-[11px] font-black text-right bg-rose-50/30 ${row.gap < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{row.gap}</td>
                           <td className="px-4 py-3 text-center">
                               <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
-                                  row.status === 'Out of Stock' ? 'bg-rose-100 text-rose-700' : 
-                                  row.status === 'Critical' ? 'bg-orange-100 text-orange-700' : 
-                                  row.status === 'Warning' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                                  row.status === 'Negative Stock' ? 'bg-rose-600 text-white shadow-sm' : 
+                                  row.status === 'Out of Stock' ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 
+                                  row.status === 'Low Stock' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 
+                                  row.status === 'Warning' ? 'bg-yellow-100 text-yellow-800' : 'bg-emerald-100 text-emerald-700'
                               }`}>
                                   {row.status}
                               </span>

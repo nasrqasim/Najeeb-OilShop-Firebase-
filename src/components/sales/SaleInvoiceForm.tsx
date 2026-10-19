@@ -815,6 +815,9 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
             startKms: payload.startKms,
             endKms: payload.endKms,
             rangeKms: payload.rangeKms,
+            amountReceived: payload.amountReceived || 0,
+            previousBalance: formData.customerBalance || 0,
+            availableAdvance: formData.customerAdvanceStats?.availableAdvance || (Number(formData.customerBalance || 0) < 0 ? Math.abs(Number(formData.customerBalance)) : 0),
             lines: items.filter(l => l.itemId).map(l => ({
               description: l.description,
               cartons: l.cartons || 0,

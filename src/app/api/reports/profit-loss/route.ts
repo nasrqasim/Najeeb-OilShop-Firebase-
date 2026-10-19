@@ -1,16 +1,25 @@
 import { ok } from "@/lib/api";
 import { getDocuments } from "@/lib/firestore/genericRepository";
 
-function getLineQty(line: any): number {
+function getLineCartonQty(line: any, item: any): number {
   const cartons = Number(line.cartons) || 0;
-  const qty = Number(line.qty) || 0;
   if (cartons > 0) return cartons;
-  if (qty > 0) return qty;
+
+  const litersInCtn = Number(item?.litersInCtn || 0);
+  const gallonsInCtn = Number(item?.gallonsInCtn || 0);
+
   const liters = Number(line.liters) || 0;
+  if (liters > 0 && litersInCtn > 0) {
+    return Number((liters / litersInCtn).toFixed(4));
+  }
+
   const gallons = Number(line.gallons) || 0;
-  if (liters > 0) return liters;
-  if (gallons > 0) return gallons;
-  return 0;
+  if (gallons > 0 && gallonsInCtn > 0) {
+    return Number((gallons / gallonsInCtn).toFixed(4));
+  }
+
+  const qty = Number(line.qty) || 0;
+  return qty > 0 ? qty : 0;
 }
 
 export async function GET(req: Request) {
@@ -22,7 +31,14 @@ export async function GET(req: Request) {
     const fromTime = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : 0;
     const toTime = toDate ? new Date(toDate).setHours(23, 59, 59, 999) : Infinity;
 
-    const allEntries = await getDocuments("journal_entries");
+    const [allEntries, accounts, allInvoices, items, otherIncomes] = await Promise.all([
+      getDocuments("journal_entries"),
+      getDocuments("accounts"),
+      getDocuments("invoices"),
+      getDocuments("items"),
+      getDocuments("other_incomes")
+    ]);
+
     const filteredEntries = allEntries.filter((j: any) => {
       const t = new Date(j.date || 0).getTime();
       return t >= fromTime && t <= toTime;
@@ -41,17 +57,13 @@ export async function GET(req: Request) {
       curr.credit += Number(j.credit || 0);
     }
 
-    const accounts = await getDocuments("accounts");
     const accountMap = new Map(accounts.map((a: any) => [a.code, a]));
 
-    const allInvoices = await getDocuments("invoices");
     const periodInvoices = allInvoices.filter((inv: any) => {
       if (inv.status === "cancelled" || inv.status === "Cancelled") return false;
       const t = new Date(inv.date || 0).getTime();
       return t >= fromTime && t <= toTime;
     });
-
-    const items = await getDocuments("items");
 
     const OUT_TYPES = new Set(["sale", "non_tax_sale", "pos", "pos_counter_sale", "reduce_stock", "challan"]);
     const OUT_RETURN_TYPES = new Set(["purchase_return", "non_tax_purchase_return"]);
@@ -69,7 +81,7 @@ export async function GET(req: Request) {
           const lineItemId = typeof line.itemId === "object" ? line.itemId?._id : line.itemId;
           if (String(lineItemId) !== String(item._id)) return;
 
-          const qty = getLineQty(line);
+          const qty = getLineCartonQty(line, item);
           if (qty > 0) {
             if (isOut) qtyOut += qty;
             if (isOutReturn) qtyOut -= qty;
@@ -95,6 +107,7 @@ export async function GET(req: Request) {
       expenses: [] as any[],
       totalRevenue: 0,
       totalExpenses: 0,
+      grossProfit: 0,
       netProfit: 0
     };
 
@@ -110,7 +123,9 @@ export async function GET(req: Request) {
       }
     });
 
+    let hasOtherIncomeJournal = false;
     balanceMap.forEach((journal, code) => {
+      // Exclude purchases (5100) and direct sales ledger (4100) to prevent double counting
       if (code === "5100" || code === "4100") return;
 
       const acc = accountMap.get(code);
@@ -131,6 +146,9 @@ export async function GET(req: Request) {
         if (balance !== 0) {
           report.revenue.push({ title, amount: balance });
           report.totalRevenue += balance;
+          if (code === "40002001" || String(title).toLowerCase().includes("other income")) {
+            hasOtherIncomeJournal = true;
+          }
         }
       } else if (type === "expense") {
         const balance = (journal.debit - journal.credit);
@@ -141,11 +159,26 @@ export async function GET(req: Request) {
       }
     });
 
+    // Fallback: If Other Incomes exist in other_incomes collection not captured via journal
+    if (!hasOtherIncomeJournal) {
+      const periodOtherIncomes = otherIncomes.filter((inc: any) => {
+        if (inc.status === "cancelled" || inc.status === "Cancelled") return false;
+        const t = new Date(inc.date || inc.createdAt || 0).getTime();
+        return t >= fromTime && t <= toTime;
+      });
+      const otherIncomeTotal = periodOtherIncomes.reduce((s: number, inc: any) => s + (Number(inc.amount) || 0), 0);
+      if (otherIncomeTotal > 0) {
+        report.revenue.push({ title: "Other Income", amount: otherIncomeTotal });
+        report.totalRevenue += otherIncomeTotal;
+      }
+    }
+
     if (totalCogs > 0) {
       report.expenses.push({ title: "Cost of Goods Sold (COGS)", amount: totalCogs });
       report.totalExpenses += totalCogs;
     }
 
+    report.grossProfit = report.totalRevenue - totalCogs;
     report.netProfit = report.totalRevenue - report.totalExpenses;
 
     return ok(report);

@@ -26,7 +26,7 @@ export async function GET(req: Request) {
       getAllBankReceipts(),
       getAllCashPayments(),
       getAllBankPayments(),
-      getDocuments("incomes"),
+      Promise.all([getDocuments("other_incomes"), getDocuments("incomes")]).then(([oi, i]) => [...(oi || []), ...(i || [])]),
       getDocuments("expenses"),
       getDocuments("accounts")
     ]);

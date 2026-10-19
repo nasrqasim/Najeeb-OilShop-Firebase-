@@ -223,6 +223,15 @@ export default function SaleInvoiceDetails({ invoice, onClose, onEdit }: SaleInv
           startKms: invoice.startKms,
           endKms: invoice.endKms,
           rangeKms: invoice.rangeKms,
+          amountReceived: invoice.amountReceived || 0,
+          previousBalance: invoice.previousBalance !== undefined 
+            ? invoice.previousBalance 
+            : (invoice.partyId?.balance !== undefined 
+                ? (invoice.partyId.balance - Math.max(0, (Number(invoice.totalAmount || invoice.total || 0) - Number(invoice.amountReceived || 0))))
+                : 0),
+          availableAdvance: invoice.availableAdvance !== undefined 
+            ? invoice.availableAdvance 
+            : (invoice.partyId?.availableAdvance || (Number(invoice.partyId?.balance || 0) < 0 ? Math.abs(Number(invoice.partyId.balance)) : 0)),
         }}
         items={items}
       />

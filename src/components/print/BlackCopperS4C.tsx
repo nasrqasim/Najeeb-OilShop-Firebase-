@@ -29,6 +29,18 @@ export default function BlackCopperS4C({
   const amountReceived = Math.round(data.amountReceived || data.receivedAmount || netTotal);
   const cashBack = amountReceived - netTotal;
 
+  const prevUdhaar = Math.max(0, Number(
+    data.previousUdhaar ?? 
+    data.previousBalance ?? 
+    (data.partyId?.balance !== undefined ? (Number(data.partyId.balance) - Math.max(0, netTotal - amountReceived)) : 0)
+  ) || 0);
+
+  const availAdvance = Math.max(0, Number(
+    data.availableAdvance ?? 
+    data.partyId?.availableAdvance ?? 
+    (data.partyId?.balance !== undefined && Number(data.partyId.balance) < 0 ? Math.abs(Number(data.partyId.balance)) : 0)
+  ) || 0);
+
   const carService = Math.round(data.carService || 0);
   const carServiceDiscount = Math.round(data.carServiceDiscount || 0);
 
@@ -292,6 +304,18 @@ export default function BlackCopperS4C({
           <div className="flex justify-between text-slate-500">
             <span>Cash Back:</span>
             <span>PKR {cashBack >= 0 ? cashBack.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00"}</span>
+          </div>
+          <div className="flex justify-between pt-1 border-t border-slate-200 text-slate-700 font-bold">
+            <span>Previous Udhaar (Receivable):</span>
+            <span className={prevUdhaar > 0 ? "text-rose-600 font-black" : ""}>
+              PKR {prevUdhaar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="flex justify-between text-slate-700 font-bold">
+            <span>Available Advance:</span>
+            <span className={availAdvance > 0 ? "text-emerald-600 font-black" : ""}>
+              PKR {availAdvance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
           </div>
         </div>
       </div>

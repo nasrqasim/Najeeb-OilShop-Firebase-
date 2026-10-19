@@ -38,6 +38,18 @@ export default function ThermalReceipt({
   const amountReceived = Math.round(data.amountReceived || data.receivedAmount || netTotal);
   const cashBack = amountReceived - netTotal;
 
+  const prevUdhaar = Math.max(0, Number(
+    data.previousUdhaar ?? 
+    data.previousBalance ?? 
+    (data.partyId?.balance !== undefined ? (Number(data.partyId.balance) - Math.max(0, netTotal - amountReceived)) : 0)
+  ) || 0);
+
+  const availAdvance = Math.max(0, Number(
+    data.availableAdvance ?? 
+    data.partyId?.availableAdvance ?? 
+    (data.partyId?.balance !== undefined && Number(data.partyId.balance) < 0 ? Math.abs(Number(data.partyId.balance)) : 0)
+  ) || 0);
+
   const carService = Math.round(data.carService || 0);
   const carServiceDiscount = Math.round(data.carServiceDiscount || 0);
   
@@ -244,6 +256,14 @@ export default function ThermalReceipt({
         <div className="flex justify-between">
           <span>Cash Back PKR</span>
           <span>{cashBack >= 0 ? cashBack.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00"}</span>
+        </div>
+        <div className="flex justify-between border-t border-dashed border-black pt-1">
+          <span>Previous Udhaar (Receivable)</span>
+          <span>Rs. {prevUdhaar.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Available Advance</span>
+          <span>Rs. {availAdvance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
         </div>
         {discount > 0 && (
           <div className="text-center font-bold text-[14px] pt-1 uppercase">
