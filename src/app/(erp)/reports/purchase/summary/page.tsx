@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
 import { Download, Printer, RotateCcw, ShoppingBag, RotateCcw as RotateLeft, TrendingUp, Percent, Scissors, Calculator, FileSpreadsheet } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
+import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 import { useMemo } from "react";
@@ -11,8 +12,8 @@ import { useMemo } from "react";
 export default function PurchaseSummaryReportPage() {
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [fromDate, setFromDate] = useState("2026-06-10");
-  const [toDate, setToDate] = useState("2026-07-16");
+  const [fromDate, setFromDate] = useState(getStartOfMonthStr());
+  const [toDate, setToDate] = useState(getCurrentDateStr());
 
   useEffect(() => {
     async function fetchData() {

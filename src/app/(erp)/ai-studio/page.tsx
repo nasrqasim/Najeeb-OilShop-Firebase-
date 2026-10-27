@@ -1,4 +1,5 @@
 "use client";
+import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -450,7 +451,7 @@ export default function AIStudioPage() {
                          <div className="grid grid-cols-2 gap-4">
                            <div className="space-y-1.5">
                              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Invoice Date</label>
-                             <input type="date" defaultValue="2026-04-28" className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-black" />
+                             <input type="date" defaultValue={getCurrentDateStr()} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-black" />
                            </div>
                            <div className="space-y-1.5">
                              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Invoice No</label>

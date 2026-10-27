@@ -3,6 +3,7 @@
 import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
 import { Download, Printer, Play, Box, DollarSign, ArrowUpRight, ArrowDownRight, LayoutGrid, Search, FileSpreadsheet } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
+import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
 import { useState, useEffect, useMemo } from "react";
 import { lineStockQty, stockToDisplayUnits } from "@/lib/itemUnits";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -11,6 +12,8 @@ export default function InventoryBalancesReportPage() {
   const [data, setData] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [fromDate, setFromDate] = useState(getStartOfMonthStr());
+  const [toDate, setToDate] = useState(getCurrentDateStr());
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(true);
 
@@ -118,12 +121,12 @@ export default function InventoryBalancesReportPage() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">From Date</label>
-          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue="2025-06-30" />
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">From Date</label>
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" />
         </div>
         <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">To Date</label>
-          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue="2026-04-29" />
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">To Date</label>
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" />
         </div>
         <div className="space-y-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Category</label>

@@ -344,8 +344,8 @@ export default function SaleInvoicePage() {
                         </button>
                         <button 
                           onClick={() => {
-                            setWaParty(inv.partyId || { name: inv.customerName });
-                            setWaDocData({ ...inv, rows: inv.items });
+                            setWaParty(inv.partyId || { name: inv.customerName, phone: inv.customerPhone, address: inv.customerAddress });
+                            setWaDocData({ ...inv, rows: inv.lines || inv.items, lines: inv.lines || inv.items });
                             setIsWhatsAppModalOpen(true);
                           }}
                           className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-[#25D366] hover:bg-[#25D366]/10 rounded-lg transition-all" title="WhatsApp"

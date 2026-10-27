@@ -250,8 +250,8 @@ export default function DeliveryChallanPage() {
                         </button>
                         <button 
                           onClick={() => {
-                            setWaParty(dc.partyId || { name: dc.customer });
-                            setWaDocData({ ...dc, rows: dc.items });
+                            setWaParty(dc.partyId || { name: dc.customer || dc.customerName, phone: dc.phone || dc.customerPhone, address: dc.address || dc.customerAddress });
+                            setWaDocData({ ...dc, rows: dc.lines || dc.items, lines: dc.lines || dc.items });
                             setIsWhatsAppModalOpen(true);
                           }}
                           className="p-1.5 text-slate-300 hover:text-[#25D366] hover:bg-[#25D366]/10 rounded-lg transition-all" title="WhatsApp"

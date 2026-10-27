@@ -1,4 +1,5 @@
 "use client";
+import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
 
 import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
 import { Download, Printer, Play, Users, DollarSign, Clock, AlertTriangle, AlertOctagon, TrendingUp, Search, FileSpreadsheet } from "lucide-react";
@@ -110,7 +111,7 @@ export default function ARAgingReportPage() {
         </div>
         <div className="space-y-1 lg:col-span-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">As Of Date</label>
-          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue="2026-04-29" />
+          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue={getCurrentDateStr()} />
         </div>
         <div className="space-y-1 lg:col-span-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Customer</label>

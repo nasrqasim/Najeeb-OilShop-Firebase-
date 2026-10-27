@@ -43,7 +43,7 @@ export default function CustomerProfileHistory({
   // WhatsApp Share Modal
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [waDocData, setWaDocData] = useState<any>(null);
-  const [waType, setWaType] = useState<"Statement" | "Reminder">("Reminder");
+  const [waType, setWaType] = useState<"Statement" | "Reminder" | "Invoice">("Reminder");
 
   // Invoice Details Modal
   const [viewInvoice, setViewInvoice] = useState<any>(null);
@@ -455,6 +455,29 @@ export default function CustomerProfileHistory({
           Back to List
         </button>
         <div className="flex gap-2">
+          {sales && sales.length > 0 && (
+            <button 
+              onClick={() => {
+                const latestSale = sales[0];
+                setWaDocData({
+                  ...latestSale,
+                  lines: latestSale.lines || latestSale.items,
+                  rows: latestSale.lines || latestSale.items,
+                  customerName: currentCustomer.name,
+                  customerAddress: currentCustomer.address,
+                  location: currentCustomer.address,
+                  phone: currentCustomer.phone
+                });
+                setWaType("Invoice");
+                setIsWhatsAppModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black shadow-xl shadow-emerald-600/20 transition-all"
+              title="Share Latest Sale Bill on WhatsApp"
+            >
+              <MessageCircle size={18} />
+              WhatsApp Bill
+            </button>
+          )}
           {currentCustomer.phone && currentCustomer.phone.replace(/[^0-9]/g, "").length >= 10 && (
             <button 
               onClick={() => {
@@ -665,12 +688,33 @@ export default function CustomerProfileHistory({
                                 </span>
                               </td>
                               <td className="px-4 py-3.5 text-center">
-                                <button 
-                                  onClick={() => setViewInvoice(item)}
-                                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 hover:text-[#800000] inline-flex items-center justify-center"
-                                >
-                                  <ChevronRight size={16} />
-                                </button>
+                                <div className="flex items-center justify-center gap-1">
+                                  <button 
+                                    onClick={() => {
+                                      setWaDocData({
+                                        ...item,
+                                        lines: item.lines || item.items,
+                                        rows: item.lines || item.items,
+                                        customerName: currentCustomer.name,
+                                        customerAddress: currentCustomer.address,
+                                        location: currentCustomer.address,
+                                        phone: currentCustomer.phone
+                                      });
+                                      setWaType("Invoice");
+                                      setIsWhatsAppModalOpen(true);
+                                    }}
+                                    className="p-1 hover:bg-[#25D366]/10 text-slate-400 hover:text-[#25D366] rounded inline-flex items-center justify-center"
+                                    title="Send Invoice on WhatsApp"
+                                  >
+                                    <MessageCircle size={15} />
+                                  </button>
+                                  <button 
+                                    onClick={() => setViewInvoice(item)}
+                                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-400 hover:text-[#800000] inline-flex items-center justify-center"
+                                  >
+                                    <ChevronRight size={16} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1277,6 +1321,27 @@ export default function CustomerProfileHistory({
                     <span className="text-maroon-800 dark:text-maroon-400">PKR {Math.round(viewInvoice.totalAmount || viewInvoice.total || 0).toLocaleString()}</span>
                   </div>
                 </div>
+              </div>
+              <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  onClick={() => {
+                    setWaDocData({
+                      ...viewInvoice,
+                      lines: viewInvoice.lines || viewInvoice.items,
+                      rows: viewInvoice.lines || viewInvoice.items,
+                      customerName: currentCustomer.name,
+                      customerAddress: currentCustomer.address,
+                      location: currentCustomer.address,
+                      phone: currentCustomer.phone
+                    });
+                    setWaType("Invoice");
+                    setIsWhatsAppModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-black shadow-md shadow-[#25D366]/20 transition-all"
+                >
+                  <MessageCircle size={15} />
+                  Send WhatsApp Bill
+                </button>
               </div>
             </div>
           </div>

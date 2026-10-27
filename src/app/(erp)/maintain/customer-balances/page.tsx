@@ -10,6 +10,7 @@ import CustomerProfileHistory from "@/components/erp/maintain/CustomerProfileHis
 import { Plus, FileText, Download, Printer, UserCheck, UserX, Wallet, Search, Edit2, Trash2, MapPin, FileSpreadsheet, ArrowLeft, Play, Calendar, MessageCircle } from "lucide-react";
 import ERPStatCard from "@/components/erp/ui/ERPStatCard";
 import { exportToExcel, downloadTemplate, printPage, printListDocument, triggerFileInput, importFromExcel } from "@/lib/excel";
+import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
 
 export default function CustomerBalancesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,8 +28,8 @@ export default function CustomerBalancesPage() {
 
   // Ledger state variables
   const [selectedLedgerCustomer, setSelectedLedgerCustomer] = useState<any>(null);
-  const [ledgerFromDate, setLedgerFromDate] = useState("2026-05-01");
-  const [ledgerToDate, setLedgerToDate] = useState("2026-05-31");
+  const [ledgerFromDate, setLedgerFromDate] = useState(getStartOfMonthStr());
+  const [ledgerToDate, setLedgerToDate] = useState(getCurrentDateStr());
   const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
   const [isLedgerLoading, setIsLedgerLoading] = useState(false);
   const [shopProfile, setShopProfile] = useState<any>(null);

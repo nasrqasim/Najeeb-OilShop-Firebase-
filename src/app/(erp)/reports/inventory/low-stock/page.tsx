@@ -11,7 +11,7 @@ export default function LowStockAlertReportPage() {
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [showOnlyBelowReorder, setShowOnlyBelowReorder] = useState(true);
+  const [showOnlyBelowReorder, setShowOnlyBelowReorder] = useState(false);
 
   // Filters State
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -92,12 +92,11 @@ export default function LowStockAlertReportPage() {
     if (selectedLocation !== "All" && "Warehouse-1" !== selectedLocation) return false;
 
     // Alert Level filter
-    if (selectedLevel !== "All") {
-      if (selectedLevel === "Negative Stock" && item.status !== "Negative Stock") return false;
-      if (selectedLevel === "Out of Stock" && item.status !== "Out of Stock") return false;
-      if (selectedLevel === "Low Stock" && item.status !== "Low Stock") return false;
-      if (selectedLevel === "Available" && item.status !== "In Stock" && item.status !== "Warning") return false;
-    }
+    if (selectedLevel === "Negative Stock" && item.status !== "Negative Stock") return false;
+    if (selectedLevel === "Out of Stock" && item.status !== "Out of Stock") return false;
+    if (selectedLevel === "Low Stock" && item.status !== "Low Stock") return false;
+    if (selectedLevel === "Available" && item.status !== "In Stock" && item.status !== "Warning") return false;
+    if (selectedLevel === "All" && showOnlyBelowReorder && item.stock > item.reorder) return false;
 
     // Date Filter (show items updated/created on or before selected date)
     if (selectedDate) {
@@ -120,8 +119,8 @@ export default function LowStockAlertReportPage() {
     return true;
   });
 
-  // 3. Final display list filtered by reorder level toggle
-  const lowStockItems = filteredItems.filter(item => !showOnlyBelowReorder || item.stock <= item.reorder);
+  // 3. Final display list
+  const lowStockItems = filteredItems;
 
   const stats = [
     { title: "Total Items", value: filteredItems.length.toString(), icon: Box, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
@@ -166,13 +165,19 @@ export default function LowStockAlertReportPage() {
         </div>
 
         <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Alert Level</label>
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Stock Level Filter</label>
           <select 
             value={selectedLevel}
-            onChange={e => setSelectedLevel(e.target.value)}
+            onChange={e => {
+              const val = e.target.value;
+              setSelectedLevel(val);
+              if (val === "All") setShowOnlyBelowReorder(false);
+              else if (val === "Low Stock") setShowOnlyBelowReorder(true);
+              else setShowOnlyBelowReorder(false);
+            }}
             className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20 dark:text-white"
           >
-            <option value="All">All Levels</option>
+            <option value="All">All Stock / All Levels</option>
             <option value="Low Stock">Low Stock</option>
             <option value="Out of Stock">Out of Stock</option>
             <option value="Available">Available / In Stock</option>
@@ -205,7 +210,14 @@ export default function LowStockAlertReportPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-6">
             <label className="flex items-center gap-2 cursor-pointer group">
-                <div className={`w-10 h-5 rounded-full p-1 transition-colors ${showOnlyBelowReorder ? 'bg-maroon-800' : 'bg-slate-200'}`} onClick={() => setShowOnlyBelowReorder(!showOnlyBelowReorder)}>
+                <div 
+                  className={`w-10 h-5 rounded-full p-1 transition-colors ${showOnlyBelowReorder ? 'bg-maroon-800' : 'bg-slate-200'}`} 
+                  onClick={() => {
+                    const next = !showOnlyBelowReorder;
+                    setShowOnlyBelowReorder(next);
+                    setSelectedLevel(next ? "Low Stock" : "All");
+                  }}
+                >
                     <div className={`w-3 h-3 bg-white dark:bg-slate-900 rounded-full transition-transform ${showOnlyBelowReorder ? 'translate-x-5' : 'translate-x-0'}`} />
                 </div>
                 <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 group-hover:text-slate-800 dark:text-slate-100">Show Only Below Reorder</span>

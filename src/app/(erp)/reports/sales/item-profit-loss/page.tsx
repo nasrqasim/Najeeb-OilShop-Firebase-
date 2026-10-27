@@ -3,68 +3,173 @@
 import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
 import { Download, Printer, Play, TrendingUp, TrendingDown, DollarSign, Percent, Package, BarChart3, RefreshCw, FileSpreadsheet } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
+import { getDefaultDateRange } from "@/lib/dateUtils";
 
 export default function ItemProfitLossReportPage() {
-  const [data, setData] = useState<any[]>([]);
+  const { fromDate: defaultFrom, toDate: defaultTo } = getDefaultDateRange();
+
+  const [fromDate, setFromDate] = useState(defaultFrom);
+  const [toDate, setToDate] = useState(defaultTo);
+  const [selectedCustomer, setSelectedCustomer] = useState("All");
+  const [selectedCustomerCategory, setSelectedCustomerCategory] = useState("All");
+  const [selectedItem, setSelectedItem] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+
+  const [rawSales, setRawSales] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [itemsList, setItemsList] = useState<any[]>([]);
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
-    async function fetchData() {
+    async function fetchFilterData() {
       setIsLoading(true);
       try {
-        const res = await fetch('/api/sales');
-        const json = await res.json();
-        if (json.ok && json.data) {
-          const itemMap: any = {};
-          json.data
-            .filter((s: any) => s.type !== 'quotation' && s.type !== 'sale_order')
-            .forEach((s: any) => {
-              const factor = (s.type === 'sale_return' || s.type === 'non_tax_sale_return' || s.type === 'pos_return') ? -1 : 1;
-              s.lines?.forEach((line: any) => {
-                const code = line.itemId?.code || "N/A";
-                if (!itemMap[code]) {
-                  itemMap[code] = {
-                    id: code,
-                    itemCode: code,
-                    itemName: line.itemId?.name || "Unknown Item",
-                    qtySold: 0,
-                    revenue: 0,
-                    cost: 0
-                  };
-                }
-                const qty = (Number(line.qty) || 0) * factor;
-                const rev = (Number(line.netAmount) || (Number(line.qty || 0) * Number(line.rate || 0)) || 0) * factor;
-                const rate = Number(line.itemId?.purchaseRate ?? line.purchaseRate ?? line.cost ?? 0);
-                const costAmt = rate * (Number(line.qty) || 0) * factor;
-                
-                itemMap[code].qtySold += qty;
-                itemMap[code].revenue += rev;
-                itemMap[code].cost += costAmt;
-              });
-            });
+        const [salesRes, partiesRes, itemsRes, catsRes] = await Promise.all([
+          fetch('/api/sales'),
+          fetch('/api/parties?type=Customer'),
+          fetch('/api/items'),
+          fetch('/api/categories')
+        ]);
+        const [salesJson, partiesJson, itemsJson, catsJson] = await Promise.all([
+          salesRes.json(),
+          partiesRes.json(),
+          itemsRes.json(),
+          catsRes.json()
+        ]);
 
-          const items = Object.values(itemMap).map((item: any) => {
-            const profit = item.revenue - item.cost;
-            return {
-              ...item,
-              profit,
-              margin: item.revenue > 0 ? (profit / item.revenue * 100).toFixed(2) + "%" : "0.00%"
-            };
-          }).sort((a: any, b: any) => b.profit - a.profit);
-
-          setData(items);
-        }
+        if (salesJson.ok && salesJson.data) setRawSales(salesJson.data);
+        if (partiesJson.ok && partiesJson.data) setCustomers(partiesJson.data);
+        if (itemsJson.ok && itemsJson.data) setItemsList(itemsJson.data);
+        if (catsJson.ok && catsJson.data) setCategoriesList(catsJson.data);
       } catch (error) {
-        console.error("Error fetching item P&L:", error);
+        console.error("Error fetching item P&L data:", error);
       } finally {
         setIsLoading(false);
       }
     }
-    fetchData();
+    fetchFilterData();
   }, []);
+
+  const customerMap = useMemo(() => new Map(customers.map(c => [String(c._id || c.id), c])), [customers]);
+  const itemMapMaster = useMemo(() => new Map(itemsList.map(i => [String(i._id || i.id), i])), [itemsList]);
+
+  // Extract unique customer categories
+  const customerCategories = useMemo(() => {
+    const set = new Set<string>();
+    customers.forEach(c => {
+      if (c.category) set.add(c.category);
+      if (c.customerCategory) set.add(c.customerCategory);
+      if (c.group) set.add(c.group);
+    });
+    return Array.from(set).filter(Boolean);
+  }, [customers]);
+
+  // Dependent / Cascading Customer filter based on selected customer category
+  const filteredCustomers = useMemo(() => {
+    if (selectedCustomerCategory === "All") return customers;
+    return customers.filter(c => {
+      const cat = c.category || c.customerCategory || c.group || "";
+      return String(cat).toLowerCase() === String(selectedCustomerCategory).toLowerCase();
+    });
+  }, [customers, selectedCustomerCategory]);
+
+  // Find all category IDs matching selectedCategory (including any subcategories under this main category)
+  const matchingCategoryIds = useMemo(() => {
+    if (selectedCategory === "All") return null;
+    const ids = new Set<string>([selectedCategory]);
+    categoriesList.forEach((c: any) => {
+      if (String(c.parentId) === selectedCategory) {
+        ids.add(String(c._id));
+      }
+    });
+    return ids;
+  }, [categoriesList, selectedCategory]);
+
+  // Dependent / Cascading Items filter based on selected item category
+  const filteredItems = useMemo(() => {
+    if (selectedCategory === "All") return itemsList;
+    return itemsList.filter(i => {
+      const mainCat = String(i.mainCategoryId || i.category || "");
+      const subCat = String(i.subCategoryId || "");
+      return matchingCategoryIds?.has(mainCat) || matchingCategoryIds?.has(subCat);
+    });
+  }, [itemsList, selectedCategory, matchingCategoryIds]);
+
+  // Compute filtered Item-wise Profit & Loss
+  const data = useMemo(() => {
+    const itemMap: Record<string, any> = {};
+
+    const fromTime = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : 0;
+    const toTime = toDate ? new Date(toDate).setHours(23, 59, 59, 999) : Infinity;
+
+    rawSales
+      .filter((s: any) => s.type !== 'quotation' && s.type !== 'sale_order' && s.status !== 'cancelled' && s.status !== 'Cancelled')
+      .forEach((s: any) => {
+        // Date filter
+        const invDate = new Date(s.date || s.createdAt || 0).getTime();
+        if (invDate < fromTime || invDate > toTime) return;
+
+        // Customer filter
+        const partyId = String(s.partyId?._id || s.partyId || s.customer || "");
+        if (selectedCustomer !== "All" && partyId !== selectedCustomer) return;
+
+        // Customer Category filter
+        const custObj = customerMap.get(partyId) || s.partyId;
+        const custCat = custObj?.category || custObj?.customerCategory || custObj?.group || "";
+        if (selectedCustomerCategory !== "All" && String(custCat).toLowerCase() !== String(selectedCustomerCategory).toLowerCase()) return;
+
+        const factor = (s.type === 'sale_return' || s.type === 'non_tax_sale_return' || s.type === 'pos_return') ? -1 : 1;
+
+        s.lines?.forEach((line: any) => {
+          const rawItemId = line.itemId?._id || line.itemId || "";
+          const itemIdStr = String(rawItemId);
+          const masterItem = itemMapMaster.get(itemIdStr) || line.itemId;
+          const code = masterItem?.code || line.itemCode || line.code || "N/A";
+          const itemName = masterItem?.name || line.description || line.itemName || "Unknown Item";
+          const mainCat = String(masterItem?.mainCategoryId || masterItem?.category || line.mainCategoryId || "");
+          const subCat = String(masterItem?.subCategoryId || line.subCategoryId || "");
+
+          // Item filter
+          if (selectedItem !== "All" && itemIdStr !== selectedItem && code !== selectedItem) return;
+
+          // Item Category filter (checks both main category and subcategory)
+          if (matchingCategoryIds && !matchingCategoryIds.has(mainCat) && !matchingCategoryIds.has(subCat)) return;
+
+          if (!itemMap[code]) {
+            itemMap[code] = {
+              id: code,
+              itemCode: code,
+              itemName,
+              categoryName: masterItem?.categoryName || "",
+              qtySold: 0,
+              revenue: 0,
+              cost: 0
+            };
+          }
+
+          let qty = (Number(line.cartons) || Number(line.qty) || 0) * factor;
+          const rev = (Number(line.netAmount) || (Number(line.qty || 0) * Number(line.rate || 0)) || 0) * factor;
+          const pRate = Number(masterItem?.purchaseRate ?? line.purchaseRate ?? line.cost ?? 0);
+          const costAmt = pRate * (Number(line.cartons) || Number(line.qty) || 0) * factor;
+
+          itemMap[code].qtySold += qty;
+          itemMap[code].revenue += rev;
+          itemMap[code].cost += costAmt;
+        });
+      });
+
+    return Object.values(itemMap).map((item: any) => {
+      const profit = item.revenue - item.cost;
+      return {
+        ...item,
+        profit,
+        margin: item.revenue > 0 ? (profit / item.revenue * 100).toFixed(2) + "%" : "0.00%"
+      };
+    }).sort((a: any, b: any) => b.profit - a.profit);
+  }, [rawSales, fromDate, toDate, selectedCustomer, selectedCustomerCategory, selectedItem, customerMap, itemMapMaster, matchingCategoryIds]);
 
   const totalRev = data.reduce((s, i) => s + i.revenue, 0);
   const totalCost = data.reduce((s, i) => s + i.cost, 0);
@@ -80,99 +185,111 @@ export default function ItemProfitLossReportPage() {
 
   const Filters = (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-10 gap-3">
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Financial Year</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>Financial Year 2025-26...</option>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date From</label>
+          <input 
+            type="date" 
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20 dark:text-white" 
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date To</label>
+          <input 
+            type="date" 
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20 dark:text-white" 
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">👥 Customer Category</label>
+          <select 
+            value={selectedCustomerCategory} 
+            onChange={(e) => {
+              setSelectedCustomerCategory(e.target.value);
+              setSelectedCustomer("All");
+            }}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20 dark:text-white"
+          >
+            <option value="All">All Customer Categories</option>
+            {customerCategories.map((cat: string) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
           </select>
         </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date From</label>
-          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue="2026-03-31" />
-        </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date To</label>
-          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue="2026-04-29" />
-        </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Customer</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Customers</option>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">👤 Customer</label>
+          <select 
+            value={selectedCustomer} 
+            onChange={(e) => setSelectedCustomer(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20 dark:text-white"
+          >
+            <option value="All">All Customers {selectedCustomerCategory !== "All" ? `(${filteredCustomers.length})` : ""}</option>
+            {filteredCustomers.map((c: any) => (
+              <option key={c._id} value={c._id}>{c.name || c.companyName}</option>
+            ))}
           </select>
         </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Item</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Items</option>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">🏷️ Item Category</label>
+          <select 
+            value={selectedCategory} 
+            onChange={(e) => {
+              setSelectedCategory(e.target.value);
+              setSelectedItem("All");
+            }}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20 dark:text-white"
+          >
+            <option value="All">All Categories</option>
+            {categoriesList.map((c: any) => (
+              <option key={c._id} value={c._id}>{c.name} {c.type === "main" ? "★" : ""}</option>
+            ))}
           </select>
         </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Category</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Categories</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Region</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Regions</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Area</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Areas</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Salesperson</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Salespersons</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Job</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Jobs</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Location</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Locations</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Include Returns</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>Yes</option>
-            <option>No</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1 xl:col-span-2">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tax Filter</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>Both (Tax + Non-Tax)</option>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">📦 Product / Item</label>
+          <select 
+            value={selectedItem} 
+            onChange={(e) => setSelectedItem(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20 dark:text-white"
+          >
+            <option value="All">All Items {selectedCategory !== "All" ? `(${filteredItems.length})` : ""}</option>
+            {filteredItems.map((i: any) => (
+              <option key={i._id} value={i._id}>{i.name} ({i.code})</option>
+            ))}
           </select>
         </div>
       </div>
       
       <div className="flex justify-end gap-2 mt-2">
-        <button className="px-3 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-[10px] font-bold hover:bg-amber-100 flex items-center justify-center gap-1.5">
-          <RefreshCw size={14} /> Update Cost Prices
+        <button 
+          onClick={() => {
+            const range = getDefaultDateRange();
+            setFromDate(range.fromDate);
+            setToDate(range.toDate);
+            setSelectedCustomer("All");
+            setSelectedItem("All");
+            setSelectedCategory("All");
+            setSelectedCustomerCategory("All");
+          }}
+          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all"
+        >
+          <RefreshCw size={13} /> Reset Filters
         </button>
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 flex items-center justify-center gap-1.5">
-          <Download size={14} /> Export CSV
-        </button>
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 flex items-center justify-center gap-1.5">
+        <button 
+          onClick={printPage}
+          className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center gap-1.5"
+        >
           <Printer size={14} /> Print
         </button>
         <button 
-          className="px-3 py-2 bg-maroon-800 text-white rounded-lg text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
-          onClick={() => setHasSearched(!hasSearched)}
+          onClick={() => exportToExcel(data, "ItemProfitLoss.xlsx")}
+          className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-700 flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/20"
         >
-          <Play size={14} /> Generate Report
+          <FileSpreadsheet size={14} /> Export Excel
         </button>
       </div>
     </div>
@@ -211,43 +328,43 @@ export default function ItemProfitLossReportPage() {
           <>
             <div className="px-4">
               <div className="flex items-center gap-2 mb-4">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Item Profitability</h3>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Item Profitability Breakdown</h3>
                 <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-xs font-bold">{data.length} items</span>
               </div>
               <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-lg">
                 <table className="w-full text-left border-collapse min-w-max">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
                     <tr>
-                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest w-8">#</th>
-                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Item Code</th>
-                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Item Name</th>
-                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Net Qty Sold</th>
+                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest w-8">#</th>
+                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Item Code</th>
+                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Item Name</th>
+                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Net Qty Sold</th>
                       <th className="px-4 py-3 text-[9px] font-black text-emerald-600 uppercase tracking-widest text-right">Revenue</th>
                       <th className="px-4 py-3 text-[9px] font-black text-rose-600 uppercase tracking-widest text-right">Cost of Goods</th>
                       <th className="px-4 py-3 text-[9px] font-black text-blue-600 uppercase tracking-widest text-right">Gross Profit</th>
                       <th className="px-4 py-3 text-[9px] font-black text-amber-600 uppercase tracking-widest text-right">Margin %</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
                     {data.map((row: any, i: number) => (
-                      <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50/50 transition-colors">
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500">{i + 1}</td>
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50/50">{row.itemCode}</td>
-                        <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 cursor-pointer hover:underline">{row.itemName}</td>
+                      <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="px-4 py-3 text-[11px] font-medium text-slate-400 dark:text-slate-500">{i + 1}</td>
+                        <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50">{row.itemCode}</td>
+                        <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 dark:text-maroon-300">{row.itemName}</td>
                         <td className="px-4 py-3 text-[11px] font-medium text-slate-700 dark:text-slate-200 text-center">{row.qtySold}</td>
-                        <td className="px-4 py-3 text-[11px] font-black text-emerald-700 text-right bg-emerald-50/30">{row.revenue.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-[11px] font-medium text-rose-700 text-right bg-rose-50/30">{row.cost.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-[11px] font-black text-blue-700 text-right bg-blue-50/30">{row.profit.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-[11px] font-black text-amber-700 text-right bg-amber-50/30">{row.margin}</td>
+                        <td className="px-4 py-3 text-[11px] font-black text-emerald-700 dark:text-emerald-400 text-right bg-emerald-50/30">{row.revenue.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-[11px] font-medium text-rose-700 dark:text-rose-400 text-right bg-rose-50/30">{row.cost.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-[11px] font-black text-blue-700 dark:text-blue-400 text-right bg-blue-50/30">{row.profit.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-[11px] font-black text-amber-700 dark:text-amber-400 text-right bg-amber-50/30">{row.margin}</td>
                       </tr>
                     ))}
                     <tr className="bg-slate-100 dark:bg-slate-800 font-black">
                       <td colSpan={3} className="px-4 py-3 text-right text-[10px] uppercase tracking-widest text-slate-800 dark:text-slate-100">TOTAL</td>
                       <td className="px-4 py-3 text-[11px] text-center">{data.reduce((s, i) => s + i.qtySold, 0)}</td>
-                      <td className="px-4 py-3 text-[11px] text-right text-emerald-700">{totalRev.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-[11px] text-right text-rose-700">{totalCost.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-[11px] text-right text-blue-700">{totalProfit.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-[11px] text-right text-amber-700">{(totalRev > 0 ? (totalProfit / totalRev * 100).toFixed(2) : "0.00")}%</td>
+                      <td className="px-4 py-3 text-[11px] text-right text-emerald-700 dark:text-emerald-400">{totalRev.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-[11px] text-right text-rose-700 dark:text-rose-400">{totalCost.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-[11px] text-right text-blue-700 dark:text-blue-400">{totalProfit.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-[11px] text-right text-amber-700 dark:text-amber-400">{(totalRev > 0 ? (totalProfit / totalRev * 100).toFixed(2) : "0.00")}%</td>
                     </tr>
                   </tbody>
                 </table>

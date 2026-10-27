@@ -1,4 +1,5 @@
 "use client";
+import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
 
 import ReportLayout from "./ReportLayout";
 import { User, ShieldAlert } from "lucide-react";
@@ -14,7 +15,7 @@ export default function CustomerAgingReport() {
   const filters = (
     <div className="space-y-1.5">
       <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Aging Date</label>
-      <input type="date" className="px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold w-48" defaultValue="2026-04-30" />
+      <input type="date" className="px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold w-48" defaultValue={getStartOfMonthStr()} />
     </div>
   );
 

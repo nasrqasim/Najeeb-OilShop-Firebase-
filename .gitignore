@@ -39,3 +39,6 @@ scripts/migration/backups/
 scripts/migration/logs/
 
 .vercel
+
+scratch/
+wipe*.mjs

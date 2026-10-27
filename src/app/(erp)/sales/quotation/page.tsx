@@ -213,8 +213,8 @@ export default function QuotationPage() {
                         </button>
                         <button 
                           onClick={() => {
-                            setWaParty(q.partyId || { name: q.customerName });
-                            setWaDocData({ ...q, rows: q.items });
+                            setWaParty(q.partyId || { name: q.customerName, phone: q.customerPhone, address: q.customerAddress });
+                            setWaDocData({ ...q, rows: q.lines || q.items, lines: q.lines || q.items });
                             setIsWhatsAppModalOpen(true);
                           }}
                           className="p-1.5 text-slate-300 hover:text-[#25D366] hover:bg-[#25D366]/10 rounded-lg transition-all" title="WhatsApp"

@@ -14,16 +14,24 @@ interface WhatsAppShareModalProps {
   shopProfile?: any;
 }
 
+const numEmojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+
 export function buildWhatsAppMessage({
   shopName,
   type,
   party,
-  documentData
+  documentData,
+  shopProfile,
+  itemsCatalog = [],
+  categoriesCatalog = []
 }: {
   shopName: string;
   type: string;
   party: any;
   documentData: any;
+  shopProfile?: any;
+  itemsCatalog?: any[];
+  categoriesCatalog?: any[];
 }) {
   const isVendor = 
     party?.type === "Vendor" || 
@@ -32,55 +40,169 @@ export function buildWhatsAppMessage({
 
   const partyLabel = isVendor ? "Vendor" : "Customer";
   const partyName = party?.name || party?.companyName || documentData?.customerName || documentData?.vendorName || (isVendor ? "Valued Vendor" : "Valued Customer");
-  const docDate = documentData?.date ? new Date(documentData.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+  
+  // Format Date & Time: 22-Oct-2026 | 01:15 PM
+  const rawDate = documentData?.date ? new Date(documentData.date) : new Date();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dayStr = String(rawDate.getDate()).padStart(2, "0");
+  const monthStr = months[rawDate.getMonth()];
+  const yearStr = rawDate.getFullYear();
+  let hours = rawDate.getHours();
+  const minutes = String(rawDate.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const timeFormatted = `${String(hours).padStart(2, "0")}:${minutes} ${ampm}`;
+  const dateTimeStr = `${dayStr}-${monthStr}-${yearStr} | ${timeFormatted}`;
 
-  let title = "INVOICE";
-  if (type === "Invoice") {
-    title = isVendor ? "PURCHASE BILL" : "SALE INVOICE";
-  } else if (type === "Receipt") {
-    title = isVendor ? "PAYMENT VOUCHER" : "PAYMENT RECEIPT";
-  } else if (type === "Statement") {
-    title = "ACCOUNT STATEMENT";
-  } else if (type === "Reminder") {
-    title = "PAYMENT REMINDER";
+  const docNo = documentData?.invoiceNo || documentData?.dcNo || documentData?.receiptNumber || documentData?.voucherNo || "1048";
+  const docNoClean = String(docNo).startsWith("#") ? docNo : `#${docNo}`;
+
+  const agencyName = (shopProfile?.companyName || shopName || "AL HADEED OIL AGENCY").toUpperCase();
+  const agencyCity = shopProfile?.address ? shopProfile.address.split(",")[0].trim() : "Winder";
+  const agencyPhone = shopProfile?.phone || "0333-5411558";
+
+  const partyLocation = party?.address || party?.city || documentData?.location || documentData?.customerAddress || "";
+
+  // If this is an Account Statement and contains ledger totals, produce Statement format
+  if (type === "Statement" && (documentData?.closing !== undefined || documentData?.totalDr !== undefined || documentData?.totalCr !== undefined)) {
+    const lines: string[] = [];
+    lines.push(`🛢️ ${agencyName}`);
+    lines.push(`📍 ${agencyCity} | 📞 ${agencyPhone}`);
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`* Statement: ${partyName}`);
+    lines.push(`* Date & Time: ${dateTimeStr}`);
+    lines.push(`* ${partyLabel}: ${partyName}`);
+    if (partyLocation) {
+      lines.push(`* Location: ${partyLocation}`);
+    }
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`📋 ACCOUNT SUMMARY:`);
+    lines.push(`* Opening Balance: Rs. ${Math.round(documentData.opening || 0).toLocaleString()}`);
+    lines.push(`* Total Sales (Debits): Rs. ${Math.round(documentData.totalDr || 0).toLocaleString()}`);
+    lines.push(`* Total Receipts (Credits): Rs. ${Math.round(documentData.totalCr || 0).toLocaleString()}`);
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━━━`);
+    const closingVal = Number(documentData.closing || 0);
+    const balType = closingVal >= 0 ? "Debit (Receivable)" : "Credit (Advance)";
+    lines.push(`💰 NET CLOSING BALANCE: Rs. ${Math.round(Math.abs(closingVal)).toLocaleString()} ${balType}`);
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`✨ Thank you for visiting ${agencyName}!`);
+    return lines.join("\n");
   }
 
-  const docNo = documentData?.invoiceNo || documentData?.dcNo || documentData?.receiptNumber || documentData?.voucherNo || "-";
-
+  // Invoice / Bill format
   const lines: string[] = [];
-  lines.push(`*${shopName.toUpperCase()}*`);
-  lines.push(`----------------------------------------`);
-  lines.push(`*${title}*`);
-  lines.push(`----------------------------------------`);
-  if (docNo && docNo !== "-") lines.push(`*Doc #:* ${docNo}`);
-  lines.push(`*Date:* ${docDate}`);
-  lines.push(`*${partyLabel}:* ${partyName}`);
+  lines.push(`🛢️ ${agencyName}`);
+  lines.push(`📍 ${agencyCity} | 📞 ${agencyPhone}`);
+  lines.push(`━━━━━━━━━━━━━━━━━━━━━━━`);
+  lines.push(`* ${isVendor ? "Bill" : "Invoice"}: ${docNoClean}`);
+  lines.push(`* Date & Time: ${dateTimeStr}`);
+  lines.push(`* ${partyLabel}: ${partyName}`);
+  if (partyLocation) {
+    lines.push(`* Location: ${partyLocation}`);
+  }
+  lines.push(`━━━━━━━━━━━━━━━━━━━━━━━`);
 
-  const items = documentData?.rows || documentData?.lines || documentData?.items || [];
-  if (items.length > 0) {
-    lines.push(`----------------------------------------`);
-    lines.push(`*ITEMS:*`);
-    items.forEach((item: any, idx: number) => {
-      const name = item.description || item.itemName || item.name || `Item ${idx + 1}`;
-      let qtyParts: string[] = [];
-      if (Number(item.cartons) > 0) qtyParts.push(`${item.cartons} Ctn`);
-      if (Number(item.liters) > 0) qtyParts.push(`${item.liters} Ltr`);
-      if (Number(item.gallons) > 0) qtyParts.push(`${item.gallons} Gal`);
-      if (qtyParts.length === 0) qtyParts.push(`${item.qty || 1} Qty`);
+  const rawItems = documentData?.lines || documentData?.items || (type !== "Statement" ? documentData?.rows : []) || [];
+  if (rawItems.length > 0) {
+    lines.push(`📦 ITEMS DETAILS:`);
+    rawItems.forEach((item: any, idx: number) => {
+      const emoji = numEmojis[idx] || `${idx + 1}️⃣`;
 
-      const qtyStr = qtyParts.join(" / ");
-      const rate = Number(item.rate || item.unitPrice || item.ratePerCtn || 0);
-      const amt = Number(item.netAmount || item.total || (item.grossAmount - (item.discount || 0)) || (rate * (Number(item.cartons) || Number(item.qty) || 1)));
-      
-      lines.push(`${idx + 1}. *${name}*`);
-      lines.push(`   ${qtyStr} @ Rs. ${Math.round(rate).toLocaleString()} = Rs. ${Math.round(amt).toLocaleString()}`);
+      // Master item lookup for accurate category and unit resolution
+      const rawItemId = String(item.itemId?._id || item.itemId || "");
+      const master = itemsCatalog.find(i => String(i._id) === rawItemId || String(i.code) === rawItemId || i.name === item.description || i.name === item.itemName);
+
+      // 1. Resolve item name
+      let name = item.description || item.itemName || item.name || item.itemId?.name || master?.name || `Item ${idx + 1}`;
+      if (name.startsWith("(") && name.includes(" - ")) {
+        name = name.slice(1).split(" - ")[0].trim();
+      }
+
+      // 2. Resolve category
+      let cat = item.category || item.categoryName || item.itemId?.category || "";
+      if (!cat && master?.mainCategoryId) {
+        const catObj = categoriesCatalog.find(c => String(c._id) === String(master.mainCategoryId));
+        if (catObj?.name) cat = catObj.name;
+      }
+      if (!cat) {
+        const lowerName = name.toLowerCase();
+        if (lowerName.includes("20w") || lowerName.includes("oil") || lowerName.includes("sheel") || lowerName.includes("atlas") || lowerName.includes("zic") || lowerName.includes("havoline") || lowerName.includes("total")) {
+          cat = "Engine Oil";
+        } else if (lowerName.includes("diesel") && lowerName.includes("filter")) {
+          cat = "Diesel Filter";
+        } else if (lowerName.includes("filter")) {
+          cat = "Oil Filter";
+        } else if (lowerName.includes("cloth") || lowerName.includes("کپڑا")) {
+          cat = "Cleaning Cloth";
+        }
+      }
+
+      let headerText = name;
+      if (cat && !name.toLowerCase().includes(cat.toLowerCase())) {
+        headerText = `${name} (${cat})`;
+      }
+
+      // 3. Resolve quantity and unit string
+      const unit = String(item.unit || item.itemId?.unit || master?.unit || "").toLowerCase();
+      let qtyStr = "";
+
+      if (unit.includes("piece") || unit.includes("pc") || cat.toLowerCase().includes("filter")) {
+        const q = Number(item.qty || item.quantity || 1);
+        qtyStr = `${q} Pc${q > 1 ? "s" : ""}`;
+      } else if (unit.includes("kg")) {
+        const q = Number(item.qty || item.quantity || 1);
+        qtyStr = `${q} KG`;
+      } else if (unit.includes("carton") || unit.includes("ctn")) {
+        const q = Number(item.cartons || item.qty || item.quantity || 1);
+        qtyStr = `${q} ${q === 1 ? "Carton" : "Cartons"}`;
+      } else if (unit.includes("liter") || cat.toLowerCase().includes("oil")) {
+        if (Number(item.cartons) > 0 && !item.liters) {
+          const ctn = Number(item.cartons);
+          qtyStr = `${ctn} ${ctn === 1 ? "Carton" : "Cartons"}`;
+        } else if (Number(item.cartons) > 0 && Number(item.cartons) < 1) {
+          qtyStr = `${item.cartons} Cartons`;
+        } else if (Number(item.cartons) > 0) {
+          const ctn = Number(item.cartons);
+          qtyStr = `${ctn} ${ctn === 1 ? "Carton" : "Cartons"}`;
+        } else if (Number(item.liters) > 0) {
+          const l = Number(item.liters);
+          qtyStr = `${l} ${l === 1 ? "Liter" : "Liters"}`;
+        } else {
+          const q = Number(item.qty || item.quantity || 1);
+          qtyStr = `${q} Liters`;
+        }
+      } else {
+        if (Number(item.cartons) > 0 && !item.liters) {
+          const ctn = Number(item.cartons);
+          qtyStr = `${ctn} ${ctn === 1 ? "Carton" : "Cartons"}`;
+        } else if (Number(item.liters) > 0) {
+          const l = Number(item.liters);
+          qtyStr = `${l} ${l === 1 ? "Liter" : "Liters"}`;
+        } else {
+          const q = Number(item.qty || item.quantity || 1);
+          qtyStr = `${q} ${item.unit || "Pc"}`;
+        }
+      }
+
+      // 4. Rate & Amount
+      let rate = Number(item.rate || item.ratePerCarton || item.unitPrice || item.price || 0);
+      let amt = Number(item.netAmount || item.total || (item.grossAmount - (item.discount || 0)) || 0);
+      const unitsCount = Number(item.cartons) || Number(item.qty) || 1;
+      if (amt === 0 && rate > 0) {
+        amt = rate * unitsCount;
+      }
+      if (rate === 0 && amt > 0) {
+        rate = Math.round(amt / unitsCount);
+      }
+
+      lines.push(`${emoji} ${headerText}`);
+      lines.push(`* Qty: ${qtyStr} @ Rs. ${Math.round(rate).toLocaleString()} = Rs. ${Math.round(amt).toLocaleString()}`);
     });
+    lines.push(`━━━━━━━━━━━━━━━━━━━━━━━`);
   }
 
   const grandTotal = Number(documentData?.totalAmount || documentData?.total || documentData?.grandTotal || documentData?.amount || 0);
-  const subTotal = Number(documentData?.subTotal || documentData?.grossAmount || 0);
-  const discount = Number(documentData?.discountAmount || documentData?.discount || 0);
-  const tax = Number(documentData?.taxAmount || 0);
   const paid = Number(documentData?.amountReceived || documentData?.amountPaid || 0);
   const thisDue = Math.max(0, grandTotal - paid);
 
@@ -92,42 +214,19 @@ export function buildWhatsAppMessage({
   }
 
   const totalBal = (prevBal > 0 ? prevBal : 0) + thisDue;
-  const advance = documentData?.availableAdvance !== undefined && documentData?.availableAdvance !== null
-    ? Number(documentData.availableAdvance)
-    : (party?.availableAdvance || (party?.balance < 0 ? Math.abs(party.balance) : 0));
 
-  lines.push(`----------------------------------------`);
-  if (subTotal > 0 && Math.round(subTotal) !== Math.round(grandTotal)) {
-    lines.push(`*Subtotal:* Rs. ${Math.round(subTotal).toLocaleString()}`);
+  if (rawItems.length > 0) {
+    lines.push(`* Total Items: ${rawItems.length}`);
   }
-  if (discount > 0) {
-    lines.push(`*Discount:* Rs. ${Math.round(discount).toLocaleString()}`);
-  }
-  if (tax > 0) {
-    lines.push(`*Tax:* Rs. ${Math.round(tax).toLocaleString()}`);
-  }
-  lines.push(`*Total Amount:* Rs. ${Math.round(grandTotal).toLocaleString()}`);
+  lines.push(`* Current Bill: Rs. ${Math.round(grandTotal).toLocaleString()}`);
   if (paid > 0) {
-    lines.push(`*Amount Paid:* Rs. ${Math.round(paid).toLocaleString()}`);
+    lines.push(`* Amount Paid: Rs. ${Math.round(paid).toLocaleString()}`);
   }
-  if (thisDue > 0 && paid > 0) {
-    lines.push(`*This Bill Due:* Rs. ${Math.round(thisDue).toLocaleString()}`);
-  }
-
-  if (prevBal > 0) {
-    lines.push(`*Previous Udhaar:* Rs. ${Math.round(prevBal).toLocaleString()}`);
-    lines.push(`*Total Balance Due:* Rs. ${Math.round(totalBal).toLocaleString()}`);
-  } else if (party?.balance !== undefined && !isVendor) {
-    lines.push(`*Net Balance Due:* Rs. ${Math.round(Math.max(0, Number(party.balance))).toLocaleString()}`);
-  }
-
-  if (advance > 0) {
-    lines.push(`*Available Advance:* Rs. ${Math.round(advance).toLocaleString()}`);
-  }
-
-  lines.push(`----------------------------------------`);
-  lines.push(`Thank you for your business!`);
-  lines.push(`*${shopName}*`);
+  lines.push(`* Previous Balance: Rs. ${Math.round(Math.max(0, prevBal)).toLocaleString()}`);
+  lines.push(`━━━━━━━━━━━━━━━━━━━━━━━`);
+  lines.push(`💰 NET TOTAL PAYABLE: Rs. ${Math.round(totalBal > 0 ? totalBal : grandTotal).toLocaleString()}`);
+  lines.push(`━━━━━━━━━━━━━━━━━━━━━━━`);
+  lines.push(`✨ Thank you for visiting ${agencyName}!`);
 
   return lines.join("\n");
 }
@@ -149,8 +248,22 @@ export default function WhatsAppShareModal({
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [copySuccess, setCopySuccess] = useState(false);
+  const [itemsCatalog, setItemsCatalog] = useState<any[]>([]);
+  const [categoriesCatalog, setCategoriesCatalog] = useState<any[]>([]);
   
   const printRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen && itemsCatalog.length === 0) {
+      Promise.all([
+        fetch('/api/items').then(r => r.json()).catch(() => ({})),
+        fetch('/api/categories').then(r => r.json()).catch(() => ({}))
+      ]).then(([itemsRes, catsRes]) => {
+        if (itemsRes?.ok && itemsRes?.data) setItemsCatalog(itemsRes.data);
+        if (catsRes?.ok && catsRes?.data) setCategoriesCatalog(catsRes.data);
+      });
+    }
+  }, [isOpen, itemsCatalog.length]);
 
   // Auto-generate detailed message on open
   useEffect(() => {
@@ -174,12 +287,15 @@ export default function WhatsAppShareModal({
         shopName,
         type,
         party,
-        documentData
+        documentData,
+        shopProfile,
+        itemsCatalog,
+        categoriesCatalog
       });
 
       setMessage(generated);
     }
-  }, [isOpen, party, type, documentData, shopProfile]);
+  }, [isOpen, party, type, documentData, shopProfile, itemsCatalog, categoriesCatalog]);
 
   const generatePreviewImage = async () => {
     if (!printRef.current) return;

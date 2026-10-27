@@ -424,6 +424,28 @@ export default function VendorProfileHistory({
           Back to Vendors
         </button>
         <div className="flex gap-2">
+          {purchases && purchases.length > 0 && (
+            <button 
+              onClick={() => {
+                const latestPur = purchases[0];
+                setWaDocData({
+                  ...latestPur,
+                  lines: latestPur.lines || latestPur.items,
+                  rows: latestPur.lines || latestPur.items,
+                  vendorName: vendor.name,
+                  vendorAddress: vendor.address,
+                  location: vendor.address,
+                  phone: vendor.phone
+                });
+                setIsWhatsAppModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black shadow-xl shadow-emerald-600/20 transition-all"
+              title="Share Latest Purchase Bill on WhatsApp"
+            >
+              <MessageCircle size={18} />
+              WhatsApp Bill
+            </button>
+          )}
           {vendor.phone && vendor.phone.replace(/[^0-9]/g, "").length >= 10 && (
             <button 
               onClick={() => {
