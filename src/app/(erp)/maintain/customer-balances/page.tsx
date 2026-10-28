@@ -7,7 +7,8 @@ import CustomerModal from "@/components/erp/maintain/CustomerModal";
 import QuickReceiptModal from "@/components/erp/maintain/QuickReceiptModal";
 import WhatsAppShareModal from "@/components/erp/whatsapp/WhatsAppShareModal";
 import CustomerProfileHistory from "@/components/erp/maintain/CustomerProfileHistory";
-import { Plus, FileText, Download, Printer, UserCheck, UserX, Wallet, Search, Edit2, Trash2, MapPin, FileSpreadsheet, ArrowLeft, Play, Calendar, MessageCircle } from "lucide-react";
+import CategoryManagementModal from "@/components/erp/maintain/CategoryManagementModal";
+import { Plus, FileText, Download, Printer, UserCheck, UserX, Wallet, Search, Edit2, Trash2, MapPin, FileSpreadsheet, ArrowLeft, Play, Calendar, MessageCircle, Settings, Tag } from "lucide-react";
 import ERPStatCard from "@/components/erp/ui/ERPStatCard";
 import { exportToExcel, downloadTemplate, printPage, printListDocument, triggerFileInput, importFromExcel } from "@/lib/excel";
 import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
@@ -25,6 +26,8 @@ export default function CustomerBalancesPage() {
   const [waDocData, setWaDocData] = useState<any>(null);
   const [waType, setWaType] = useState<"Statement" | "Reminder">("Reminder");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
   // Ledger state variables
   const [selectedLedgerCustomer, setSelectedLedgerCustomer] = useState<any>(null);
@@ -33,6 +36,18 @@ export default function CustomerBalancesPage() {
   const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
   const [isLedgerLoading, setIsLedgerLoading] = useState(false);
   const [shopProfile, setShopProfile] = useState<any>(null);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/categories?type=customer&t=" + Date.now());
+      const json = await res.json();
+      if (json.ok && Array.isArray(json.data)) {
+        setCategories(json.data.map((c: any) => c.name));
+      }
+    } catch (e) {
+      console.error("Error fetching categories:", e);
+    }
+  };
 
   const fetchCustomers = async () => {
     setIsLoading(true);
@@ -62,6 +77,7 @@ export default function CustomerBalancesPage() {
   useEffect(() => {
     fetchCustomers();
     fetchShopProfile();
+    fetchCategories();
 
     // Default dates: start of current month to today/end of month
     const today = new Date();
@@ -399,18 +415,6 @@ export default function CustomerBalancesPage() {
     },
   ];
 
-  // The 8 specified customer categories
-  const categories = [
-    "Cash Customer",
-    "Credit Customer",
-    "Cash Customer (Jama)",
-    "Credit Customer (Counter)",
-    "Credit Customer Max",
-    "Credit Customer (Haji Gul)",
-    "Credit Customer (Makkah)",
-    "Credit Customer (Radbook)"
-  ];
-
   // Filter customers by search term and category
   const filteredCustomers = customers.filter(c => {
     const term = searchTerm.toLowerCase();
@@ -621,6 +625,15 @@ export default function CustomerBalancesPage() {
             {cat}
           </button>
         ))}
+
+        <button
+          onClick={() => setIsCategoryModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-dashed border-maroon-800/40 text-maroon-800 dark:text-rose-400 hover:bg-maroon-50 dark:hover:bg-maroon-950/30 rounded-xl text-xs font-black transition-all ml-auto shadow-sm"
+          title="Add, edit or delete customer categories"
+        >
+          <Settings size={13} />
+          <span>Manage Categories</span>
+        </button>
       </div>
 
       {/* Single Table for all Customers */}
@@ -707,6 +720,17 @@ export default function CustomerBalancesPage() {
         type={waType}
         documentData={waDocData}
         shopProfile={shopProfile}
+      />
+
+      <CategoryManagementModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        type="customer"
+        title="Manage Customer Categories"
+        onCategoriesUpdated={() => {
+          fetchCategories();
+          fetchCustomers();
+        }}
       />
     </div>
   );

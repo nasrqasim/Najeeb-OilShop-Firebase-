@@ -5,7 +5,9 @@ import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
 import { Download, Printer, Play, Users, DollarSign, ArrowDownLeft, ArrowUpRight, Search, FileSpreadsheet } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
 import VendorProfileHistory from "@/components/erp/maintain/VendorProfileHistory";
+import CategoryManagementModal from "@/components/erp/maintain/CategoryManagementModal";
 import { calculateVendorBalance } from "@/lib/centralizedBalanceService";
+import { Settings } from "lucide-react";
 
 function formatBalance(val: number) {
   if (val < 0) return { text: `-Rs. ${Math.abs(val).toLocaleString()}`, label: "(Debit)", color: "text-rose-600" };
@@ -29,6 +31,27 @@ export default function VendorBalancesReportPage() {
   const [bankReceipts, setBankReceipts] = useState<any[]>([]);
   const [cashPayments, setCashPayments] = useState<any[]>([]);
   const [bankPayments, setBankPayments] = useState<any[]>([]);
+
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [selectedVendorFilter, setSelectedVendorFilter] = useState<string>("All");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/categories?type=vendor&t=" + Date.now());
+      const json = await res.json();
+      if (json.ok && Array.isArray(json.data)) {
+        setCategories(json.data.map((c: any) => c.name));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     const today = new Date();
@@ -217,18 +240,29 @@ export default function VendorBalancesReportPage() {
 
   useEffect(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) {
-      setFilteredData(data);
-      return;
+    let result = data;
+
+    if (selectedCategory !== "All") {
+      result = result.filter((r) => {
+        const cat = (r.rawParty?.category || r.category || "").toLowerCase().trim();
+        const sel = selectedCategory.toLowerCase().trim();
+        return cat === sel || (r.rawParty?.type || "").toLowerCase().trim() === sel;
+      });
     }
-    setFilteredData(
-      data.filter((r) =>
+
+    if (selectedVendorFilter !== "All") {
+      result = result.filter((r) => r.id === selectedVendorFilter || r.rawParty?._id === selectedVendorFilter);
+    }
+
+    if (q) {
+      result = result.filter((r) =>
         String(r.vendor || "").toLowerCase().includes(q) ||
         String(r.city || "").toLowerCase().includes(q) ||
         String(r.type || "").toLowerCase().includes(q)
-      )
-    );
-  }, [searchQuery, data]);
+      );
+    }
+    setFilteredData(result);
+  }, [searchQuery, selectedCategory, selectedVendorFilter, data]);
 
   const totalDebit = filteredData.reduce((s, r) => s + r.debit, 0);
   const totalCredit = filteredData.reduce((s, r) => s + r.credit, 0);
@@ -262,8 +296,17 @@ export default function VendorBalancesReportPage() {
         </div>
         <div className="space-y-1 lg:col-span-2">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Vendor</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Vendors</option>
+          <select
+            value={selectedVendorFilter}
+            onChange={(e) => setSelectedVendorFilter(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Vendors</option>
+            {rawParties.map((p: any) => (
+              <option key={p._id || p.id} value={p._id || p.id}>
+                {p.name || p.companyName}
+              </option>
+            ))}
           </select>
         </div>
         
@@ -324,6 +367,33 @@ export default function VendorBalancesReportPage() {
       ]}
     >
       <div className="space-y-6">
+        {/* Category Filter Buttons */}
+        <div className="no-print bg-slate-50 dark:bg-slate-800/40 rounded-[2rem] p-4 border border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center mx-4">
+          <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mr-2">Categories:</span>
+          {["All", ...categories].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
+                selectedCategory === cat
+                  ? "bg-maroon-800 text-white shadow-sm shadow-maroon-800/20"
+                  : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+
+          <button
+            onClick={() => setIsCategoryModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-dashed border-maroon-800/40 text-maroon-800 dark:text-rose-400 hover:bg-maroon-50 dark:hover:bg-maroon-950/30 rounded-full text-[10px] font-bold transition-all ml-auto shadow-sm"
+            title="Manage Vendor Categories"
+          >
+            <Settings size={12} />
+            <span>Manage Categories</span>
+          </button>
+        </div>
+
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">
             <div className="w-8 h-8 border-4 border-maroon-800 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -396,6 +466,16 @@ export default function VendorBalancesReportPage() {
           </div>
         )}
       </div>
+
+      <CategoryManagementModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        type="vendor"
+        title="Manage Vendor Categories"
+        onCategoriesUpdated={() => {
+          fetchCategories();
+        }}
+      />
     </ERPReportLayout>
   );
 }

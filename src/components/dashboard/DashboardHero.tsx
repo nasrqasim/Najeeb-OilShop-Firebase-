@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import ReorderNotificationBell from "@/components/erp/ReorderNotificationBell";
+
 
 interface DashboardHeroProps {
   userName: string;
@@ -280,10 +282,9 @@ export default function DashboardHero({ userName }: DashboardHeroProps) {
             >
               {isLight ? <Moon size={20} /> : <Sun size={20} />}
             </button>
-            <button className={`p-3 rounded-xl transition-all relative ${utilBtn}`}>
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
-            </button>
+            <div className={`rounded-xl transition-all ${utilBtn} p-1 flex items-center justify-center`}>
+              <ReorderNotificationBell />
+            </div>
           </div>
         </div>
       </div>

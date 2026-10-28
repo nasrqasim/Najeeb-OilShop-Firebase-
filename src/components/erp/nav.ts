@@ -68,7 +68,6 @@ export const erpModules: ERPNavItem[] = [
       { title: "Inventory Locations", href: "/maintain/locations", roles: ["admin", "dataentry"] },
       { title: "Employees", href: "/maintain/employees", roles: ["admin", "dataentry"] },
       { title: "Regions", href: "/maintain/regions", roles: ["admin", "dataentry"] },
-      { title: "Jobs / Projects", href: "/maintain/jobs", roles: ["admin", "dataentry"] },
       { title: "Opening Balances", href: "/maintain/opening-balances", roles: ["admin", "dataentry"] },
       { title: "Import Templates", href: "/maintain/import-templates", roles: ["admin", "dataentry"] },
       { title: "Units of Measure", href: "/maintain/units", roles: ["admin", "dataentry"] },

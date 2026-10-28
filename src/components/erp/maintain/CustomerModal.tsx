@@ -40,6 +40,16 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
   const [closingBalanceType, setClosingBalanceType] = useState<"Credit" | "Debit">("Debit");
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [shopProfile, setShopProfile] = useState<any>(null);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([
+    "Cash Customer",
+    "Credit Customer",
+    "Cash Customer (Jama)",
+    "Credit Customer (Counter)",
+    "Credit Customer Max",
+    "Credit Customer (Haji Gul)",
+    "Credit Customer (Makkah)",
+    "Credit Customer (Radbook)"
+  ]);
 
   useEffect(() => {
     const fetchShopProfile = async () => {
@@ -51,8 +61,20 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
         console.error(e);
       }
     };
+    const fetchCats = async () => {
+      try {
+        const res = await fetch("/api/categories?type=customer&t=" + Date.now());
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
+          setAvailableCategories(json.data.map((c: any) => c.name));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
     if (isOpen) {
       fetchShopProfile();
+      fetchCats();
     }
   }, [isOpen]);
 
@@ -224,14 +246,14 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
               className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-xl text-sm font-bold focus:bg-white dark:focus:bg-slate-900 outline-none transition-all dark:text-white"
               required
             >
-              <option value="Cash Customer">Cash Customer</option>
-              <option value="Credit Customer">Credit Customer</option>
-              <option value="Cash Customer (Jama)">Cash Customer (Jama)</option>
-              <option value="Credit Customer (Counter)">Credit Customer (Counter)</option>
-              <option value="Credit Customer Max">Credit Customer Max</option>
-              <option value="Credit Customer (Haji Gul)">Credit Customer (Haji Gul)</option>
-              <option value="Credit Customer (Makkah)">Credit Customer (Makkah)</option>
-              <option value="Credit Customer (Radbook)">Credit Customer (Radbook)</option>
+              {availableCategories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+              {formData.category && !availableCategories.includes(formData.category) && (
+                <option value={formData.category}>{formData.category}</option>
+              )}
             </select>
           </div>
           <div className="space-y-2">

@@ -1,29 +1,47 @@
 "use client";
 import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
-
 import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
-import { Download, Printer, Play, ShoppingCart, Percent, DollarSign, MapPin, Users, BarChart3, TrendingUp, FileSpreadsheet } from "lucide-react";
+import { Download, Printer, Play, ShoppingCart, Percent, DollarSign, MapPin, Users, BarChart3, TrendingUp, FileSpreadsheet, RotateCcw, Search } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
 import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, LineChart, Line, ComposedChart, Area, AreaChart } from 'recharts';
 
 export default function SalesIntelligenceReportPage() {
+  const [rawSales, setRawSales] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [data, setData] = useState<any[]>([]);
   const [quotations, setQuotations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+
+  // Filters
+  const [dateFrom, setDateFrom] = useState(getStartOfMonthStr());
+  const [dateTo, setDateTo] = useState(getCurrentDateStr());
+  const [selectedCustomer, setSelectedCustomer] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true);
       try {
-        const salesRes = await fetch('/api/sales');
-        const salesJson = await salesRes.json();
+        const [salesRes, custRes] = await Promise.all([
+          fetch('/api/sales'),
+          fetch('/api/parties?type=customer')
+        ]);
+        const [salesJson, custJson] = await Promise.all([
+          salesRes.json(),
+          custRes.json()
+        ]);
+
+        if (custJson.ok && custJson.data) setCustomers(custJson.data);
 
         if (salesJson.ok && salesJson.data) {
-          setData(salesJson.data);
-          const qts = salesJson.data.filter((s: any) => s.type === 'quotation');
-          setQuotations(qts);
+          setRawSales(salesJson.data);
+          processIntelligence(salesJson.data, {
+            dateFrom: getStartOfMonthStr(),
+            dateTo: getCurrentDateStr(),
+            selectedCustomer: "All",
+            searchQuery: ""
+          });
         }
       } catch (error) {
         console.error("Error fetching intelligence data:", error);
@@ -34,223 +52,219 @@ export default function SalesIntelligenceReportPage() {
     fetchData();
   }, []);
 
-  const siOnly = data.filter(s => s.type === 'sale' || s.type === 'sale_invoice' || s.type === 'non_tax_sale' || s.type === 'non_tax_sale_invoice' || s.type === 'pos_counter_sale');
+  function processIntelligence(sales: any[], filters: any) {
+    let filtered = sales.filter((s: any) => {
+      if (s.date) {
+        const d = s.date.substring(0, 10);
+        if (filters.dateFrom && d < filters.dateFrom) return false;
+        if (filters.dateTo && d > filters.dateTo) return false;
+      }
+
+      if (filters.selectedCustomer !== "All") {
+        const cId = s.partyId?._id || s.partyId?.id || s.partyId;
+        if (cId !== filters.selectedCustomer) return false;
+      }
+
+      if (filters.searchQuery) {
+        const q = filters.searchQuery.toLowerCase();
+        const cName = s.partyId?.name || s.partyId?.companyName || s.customerName || "";
+        const docNo = s.invoiceNo || s.docNo || "";
+        if (!cName.toLowerCase().includes(q) && !docNo.toLowerCase().includes(q)) return false;
+      }
+
+      return true;
+    });
+
+    setData(filtered);
+    setQuotations(filtered.filter((s: any) => s.type === 'quotation'));
+  }
+
+  const handleGenerate = () => {
+    processIntelligence(rawSales, {
+      dateFrom,
+      dateTo,
+      selectedCustomer,
+      searchQuery
+    });
+  };
+
+  const handleReset = () => {
+    const defaultFrom = getStartOfMonthStr();
+    const defaultTo = getCurrentDateStr();
+    setDateFrom(defaultFrom);
+    setDateTo(defaultTo);
+    setSelectedCustomer("All");
+    setSearchQuery("");
+    processIntelligence(rawSales, {
+      dateFrom: defaultFrom,
+      dateTo: defaultTo,
+      selectedCustomer: "All",
+      searchQuery: ""
+    });
+  };
+
+  const siOnly = data.filter(s => s.type === 'sale' || s.type === 'sale_invoice' || s.type === 'non_tax_sale' || s.type === 'pos');
   const totalRevenue = siOnly.reduce((s, r) => s + (r.totalAmount || 0), 0);
-  const uniqueCustomers = new Set(siOnly.map(s => s.partyId?._id)).size;
+  const uniqueCustomers = new Set(siOnly.map(s => s.partyId?._id || s.customerName)).size;
   const avgOrderValue = siOnly.length > 0 ? totalRevenue / siOnly.length : 0;
   const totalQtValue = quotations.reduce((s, q) => s + (q.totalAmount || 0), 0);
-  const conversionRate = quotations.length > 0 ? (siOnly.length / quotations.length * 100).toFixed(1) : "0.0";
+  const conversionRate = quotations.length > 0 ? ((siOnly.length / quotations.length) * 100).toFixed(1) : "0.0";
 
   const stats = [
     { title: "Total Quotations", value: quotations.length.toString(), subtitle: `Rs. ${totalQtValue.toLocaleString()}`, icon: ShoppingCart, iconColor: "text-blue-600", iconBg: "bg-blue-50" },
     { title: "Conversion Rate", value: `${conversionRate}%`, subtitle: "SI count / total QT", icon: Percent, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
-    { title: "Total Revenue", value: `Rs. ${totalRevenue.toLocaleString()}`, subtitle: "Posted invoices", icon: DollarSign, iconColor: "text-rose-600", iconBg: "bg-rose-50", valueColor: "text-rose-600" },
-    { title: "Top Customer", value: "Multiple", subtitle: "Based on volume", icon: MapPin, iconColor: "text-orange-600", iconBg: "bg-orange-50" },
-    { title: "Unique Customers", value: uniqueCustomers.toString(), subtitle: "With posted invoices", icon: Users, iconColor: "text-purple-600", iconBg: "bg-purple-50" },
-    { title: "Avg Order Value", value: `Rs. ${avgOrderValue.toLocaleString()}`, subtitle: "Total SI / Count SI", icon: BarChart3, iconColor: "text-amber-600", iconBg: "bg-amber-50" },
+    { title: "Total Revenue", value: `Rs. ${totalRevenue.toLocaleString()}`, subtitle: "Posted sales in period", icon: DollarSign, iconColor: "text-rose-600", iconBg: "bg-rose-50", valueColor: "text-rose-600" },
+    { title: "Active Customers", value: uniqueCustomers.toString(), subtitle: "Customers billed", icon: Users, iconColor: "text-purple-600", iconBg: "bg-purple-50" },
+    { title: "Avg Order Value", value: `Rs. ${Math.round(avgOrderValue).toLocaleString()}`, subtitle: "Average invoice size", icon: BarChart3, iconColor: "text-amber-600", iconBg: "bg-amber-50" },
   ];
 
   const Filters = (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Financial Year</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>Financial Year 2025-26...</option>
+    <div className="flex flex-col gap-3 w-full">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date From</label>
+          <input 
+            type="date" 
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date To</label>
+          <input 
+            type="date" 
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Customer</label>
+          <select 
+            value={selectedCustomer}
+            onChange={(e) => setSelectedCustomer(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Customers</option>
+            {customers.map((c: any) => (
+              <option key={c._id || c.id} value={c._id || c.id}>
+                {c.name || c.companyName} {c.code ? `(${c.code})` : ''}
+              </option>
+            ))}
           </select>
         </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date From</label>
-          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue={getStartOfMonthStr()} />
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date To</label>
-          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue={getCurrentDateStr()} />
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Customer</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Customers</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Region</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Regions</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Area</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Areas</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Group By</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>Monthly</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tax Filter</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>Both (Tax + Non-Tax)</option>
-          </select>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Search</label>
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Customer or Invoice #..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+            />
+          </div>
         </div>
       </div>
       
-      <div className="flex justify-end gap-2 mt-2">
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 flex items-center justify-center gap-1.5">
-          <Download size={14} /> Export CSV
-        </button>
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 flex items-center justify-center gap-1.5">
-          <Printer size={14} /> Print
-        </button>
+      <div className="flex justify-end gap-2 shrink-0">
         <button 
-          className="px-3 py-2 bg-maroon-800 text-white rounded-lg text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
-          onClick={() => setHasSearched(!hasSearched)}
+          onClick={handleGenerate}
+          className="px-3 py-1.5 bg-maroon-800 text-white rounded-lg text-xs font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
         >
           <Play size={14} /> Generate Report
+        </button>
+        <button 
+          onClick={handleReset}
+          className="px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-center gap-1.5"
+        >
+          <RotateCcw size={14} /> Reset
         </button>
       </div>
     </div>
   );
 
-  const revenueData = Object.entries(siOnly.reduce((acc: any, curr) => {
-    const d = new Date(curr.date).toLocaleString('default', { month: 'short' });
-    if (!acc[d]) acc[d] = { name: d, revenue: 0, target: totalRevenue / 12 };
-    acc[d].revenue += curr.totalAmount || 0;
+  const topCustomers = Object.entries(siOnly.reduce((acc: any, curr) => {
+    const name = curr.partyId?.name || curr.customerName || "Walk-in";
+    if (!acc[name]) acc[name] = { name, revenue: 0, orders: 0 };
+    acc[name].revenue += curr.totalAmount || 0;
+    acc[name].orders += 1;
     return acc;
-  }, {})).map(([_, v]) => v);
-
-  const conversionData = [
-    { name: 'Current Period', quotations: quotations.length, orders: siOnly.length, invoices: siOnly.length, rate: parseFloat(conversionRate) },
-  ];
-
-  const regionData = Object.entries(siOnly.reduce((acc: any, curr) => {
-    const reg = curr.partyId?.region || "Unassigned";
-    if (!acc[reg]) acc[reg] = { name: reg, value: 0 };
-    acc[reg].value += curr.totalAmount || 0;
-    return acc;
-  }, {})).map(([_, v]) => v).sort((a: any, b: any) => b.value - a.value).slice(0, 5);
-
-  const customerRetentionData = Object.entries(siOnly.reduce((acc: any, curr) => {
-    const d = new Date(curr.date).toLocaleString('default', { month: 'short' });
-    if (!acc[d]) acc[d] = { name: d, new: 0, returning: 0 };
-    acc[d].returning += 1;
-    return acc;
-  }, {})).map(([_, v]) => v);
+  }, {})).map(([_, v]) => v).sort((a: any, b: any) => b.revenue - a.revenue).slice(0, 10);
 
   return (
     <ERPReportLayout
-      title="Sales Intelligence Report"
-      description="Comprehensive sales data analysis including conversion rates, customer retention, and regional performance."
+      title="Sales Intelligence"
+      description="Executive business intelligence dashboard covering key revenue drivers, conversion, and top contributors."
       stats={stats}
       filters={Filters}
       actions={[
         { label: "Print Report", onClick: printPage, icon: Printer },
-        { label: "Export Excel", onClick: () => exportToExcel(revenueData, "SalesIntelligence.xlsx"), icon: FileSpreadsheet },
+        { label: "Export Excel", onClick: () => exportToExcel(topCustomers, "SalesIntelligence.xlsx"), icon: FileSpreadsheet },
       ]}
     >
       <div className="space-y-6">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <div className="w-8 h-8 border-4 border-maroon-800 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-sm font-bold">Analyzing live intelligence data...</p>
-          </div>
-        ) : siOnly.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50/50 mx-4">
-            <TrendingUp size={48} className="mb-4 opacity-30" />
-            <p className="text-sm font-bold text-slate-600 dark:text-slate-300">No sales data found for the selected criteria</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 px-4">
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-white dark:bg-slate-900 shadow-sm">
-                <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6 uppercase tracking-widest">Revenue vs Target Trend</h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={revenueData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" tick={{fontSize: 10}} />
-                      <YAxis tick={{fontSize: 10}} />
-                      <RechartsTooltip formatter={(value) => `Rs.${value}`} />
-                      <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '10px' }}/>
-                      <Bar dataKey="revenue" name="Actual Revenue" fill="#10b981" barSize={30} radius={[4, 4, 0, 0]} />
-                      <Line type="step" dataKey="target" name="Target Revenue" stroke="#e11d48" strokeWidth={2} dot={false} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-white dark:bg-slate-900 shadow-sm">
-                <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6 uppercase tracking-widest">Customer Acquisition & Retention</h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={customerRetentionData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" tick={{fontSize: 10}} />
-                      <YAxis tick={{fontSize: 10}} />
-                      <RechartsTooltip />
-                      <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '10px' }}/>
-                      <Area type="monotone" dataKey="returning" name="Returning Customers" stackId="1" stroke="#3b82f6" fill="#bfdbfe" />
-                      <Area type="monotone" dataKey="new" name="New Customers" stackId="1" stroke="#f59e0b" fill="#fde68a" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-white dark:bg-slate-900 shadow-sm">
-                <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6 uppercase tracking-widest">Conversion Funnel (Quotations → Invoices)</h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={conversionData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" tick={{fontSize: 10}} />
-                      <YAxis yAxisId="left" tick={{fontSize: 10}} />
-                      <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10}} />
-                      <RechartsTooltip />
-                      <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '10px' }}/>
-                      <Bar yAxisId="left" dataKey="quotations" name="Quotations" fill="#94a3b8" barSize={15} />
-                      <Bar yAxisId="left" dataKey="orders" name="Orders" fill="#3b82f6" barSize={15} />
-                      <Bar yAxisId="left" dataKey="invoices" name="Invoices" fill="#10b981" barSize={15} />
-                      <Line yAxisId="right" type="monotone" dataKey="rate" name="Conversion %" stroke="#e11d48" strokeWidth={2} dot={{r: 4}} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-white dark:bg-slate-900 shadow-sm">
-                <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6 uppercase tracking-widest">Sales by Region</h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={regionData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" tick={{fontSize: 10}} />
-                      <YAxis dataKey="name" type="category" tick={{fontSize: 10}} />
-                      <RechartsTooltip formatter={(value) => `Rs.${value}`} />
-                      <Bar dataKey="value" name="Revenue" fill="#881337" barSize={20} radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+        <div className="px-4">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-white dark:bg-slate-900 shadow-sm">
+            <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6 uppercase tracking-widest">Top 10 High Value Customers by Revenue</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topCustomers} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" tick={{fontSize: 10}} />
+                  <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={90} />
+                  <RechartsTooltip />
+                  <Bar dataKey="revenue" name="Revenue (Rs)" fill="#881337" barSize={16} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            
-            <div className="px-4 mt-2">
-               <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl flex items-start gap-4">
-                 <div className="p-2 bg-blue-100 rounded-lg text-blue-600 shrink-0">
-                    <BarChart3 size={20} />
-                 </div>
-                 <div>
-                    <h4 className="text-sm font-bold text-blue-900 mb-1">Live Intelligence Insights</h4>
-                    <p className="text-xs text-blue-800/80 leading-relaxed">
-                        Total revenue of Rs. {totalRevenue.toLocaleString()} across {siOnly.length} invoices. Conversion rate from quotations is {conversionRate}%. The average order value stands at Rs. {avgOrderValue.toLocaleString()}.
-                    </p>
-                 </div>
-               </div>
-            </div>
-          </>
-        )}
+          </div>
+        </div>
+
+        <div className="px-4">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Top Revenue Contributors</h3>
+            <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-xs font-bold">{topCustomers.length} top customers</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse border-b border-slate-200 dark:border-slate-800 min-w-max">
+              <thead className="bg-slate-50 dark:bg-slate-800/50 border-y border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-8">#</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Orders Count</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue (Rs)</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Avg Order Size</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">% of Period Revenue</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-xs text-slate-400">Loading sales intelligence...</td>
+                  </tr>
+                ) : topCustomers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-xs text-slate-400">No customer sales found matching the selected filters.</td>
+                  </tr>
+                ) : (
+                  topCustomers.map((c: any, i: number) => (
+                    <tr key={c.name} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="px-4 py-3 text-[11px] font-medium text-slate-400">{i + 1}</td>
+                      <td className="px-4 py-3 text-[11px] font-bold text-slate-800 dark:text-slate-100">{c.name}</td>
+                      <td className="px-4 py-3 text-[11px] text-center font-bold text-slate-600 dark:text-slate-300">{c.orders}</td>
+                      <td className="px-4 py-3 text-[11px] font-black text-emerald-600 text-right">Rs. {c.revenue.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-[11px] text-slate-600 dark:text-slate-300 text-right">Rs. {Math.round(c.revenue / c.orders).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-[11px] font-black text-rose-800 dark:text-rose-400 text-right bg-rose-50/30 dark:bg-rose-950/20">{totalRevenue > 0 ? ((c.revenue / totalRevenue) * 100).toFixed(1) + "%" : "0%"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </ERPReportLayout>
   );

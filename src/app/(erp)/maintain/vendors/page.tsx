@@ -7,7 +7,8 @@ import VendorModal from "@/components/erp/maintain/VendorModal";
 import QuickPaymentModal from "@/components/erp/maintain/QuickPaymentModal";
 import WhatsAppShareModal from "@/components/erp/whatsapp/WhatsAppShareModal";
 import VendorProfileHistory from "@/components/erp/maintain/VendorProfileHistory";
-import { Plus, FileText, Download, Printer, UserCheck, UserX, Wallet, Search, Edit2, Trash2, MapPin, User, Hash, FileSpreadsheet, MessageCircle } from "lucide-react";
+import CategoryManagementModal from "@/components/erp/maintain/CategoryManagementModal";
+import { Plus, FileText, Download, Printer, UserCheck, UserX, Wallet, Search, Edit2, Trash2, MapPin, User, Hash, FileSpreadsheet, MessageCircle, Settings, Tag } from "lucide-react";
 import ERPStatCard from "@/components/erp/ui/ERPStatCard";
 import { exportToExcel, downloadTemplate, printPage, printListDocument, triggerFileInput, importFromExcel } from "@/lib/excel";
 
@@ -23,6 +24,21 @@ export default function VendorsPage() {
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [waParty, setWaParty] = useState<any>(null);
   const [selectedProfileVendor, setSelectedProfileVendor] = useState<any>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/categories?type=vendor&t=" + Date.now());
+      const json = await res.json();
+      if (json.ok && Array.isArray(json.data)) {
+        setCategories(json.data.map((c: any) => c.name));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchVendors = async () => {
     setIsLoading(true);
@@ -52,6 +68,7 @@ export default function VendorsPage() {
   useEffect(() => {
     fetchVendors();
     fetchShopProfile();
+    fetchCategories();
   }, []);
 
   useEffect(() => {
@@ -245,10 +262,10 @@ export default function VendorsPage() {
     },
   ];
 
-  // Filter vendors by search term
+  // Filter vendors by search term and category
   const filteredVendors = vendors.filter(v => {
     const term = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = (
       v.name?.toLowerCase().includes(term) ||
       v.code?.toLowerCase().includes(term) ||
       v.contactPerson?.toLowerCase().includes(term) ||
@@ -256,6 +273,8 @@ export default function VendorsPage() {
       v.city?.toLowerCase().includes(term) ||
       v.ntn?.toLowerCase().includes(term)
     );
+    const matchesCategory = selectedCategory === "All" || v.category === selectedCategory || v.type === selectedCategory;
+    return matchesSearch && matchesCategory;
   });
 
   if (selectedProfileVendor) {
@@ -419,6 +438,43 @@ export default function VendorsPage() {
         </div>
       </div>
 
+      {/* Category Filter Buttons */}
+      <div className="no-print bg-slate-50 dark:bg-slate-800/40 rounded-[2rem] p-4 border border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center">
+        <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mr-2">Filter Category:</span>
+        <button
+          onClick={() => setSelectedCategory("All")}
+          className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+            selectedCategory === "All"
+              ? "bg-maroon-800 text-white shadow-md shadow-maroon-900/20"
+              : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800"
+          }`}
+        >
+          All
+        </button>
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+              selectedCategory === cat
+                ? "bg-maroon-800 text-white shadow-md shadow-maroon-900/20"
+                : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800"
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+
+        <button
+          onClick={() => setIsCategoryModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-dashed border-maroon-800/40 text-maroon-800 dark:text-rose-400 hover:bg-maroon-50 dark:hover:bg-maroon-950/30 rounded-xl text-xs font-black transition-all ml-auto shadow-sm"
+          title="Add, edit or delete vendor categories"
+        >
+          <Settings size={13} />
+          <span>Manage Categories</span>
+        </button>
+      </div>
+
       <div className="print-container bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all hover:shadow-xl hover:shadow-maroon-900/5 min-h-[100px]">
         {/* Print Header (Visible only when printing) */}
         <div className="hidden print-header p-6 pb-0">
@@ -486,6 +542,17 @@ export default function VendorsPage() {
         party={waParty}
         type="Reminder"
         shopProfile={shopProfile}
+      />
+
+      <CategoryManagementModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        type="vendor"
+        title="Manage Vendor Categories"
+        onCategoriesUpdated={() => {
+          fetchCategories();
+          fetchVendors();
+        }}
       />
     </div>
   );

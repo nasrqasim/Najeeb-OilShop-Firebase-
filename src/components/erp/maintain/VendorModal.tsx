@@ -16,6 +16,7 @@ export default function VendorModal({ isOpen, onClose, vendor, onSave }: VendorM
   const [formData, setFormData] = useState({
     name: "",
     type: "Supplier",
+    category: "General Supplier",
     contactPerson: "",
     email: "",
     phone: "",
@@ -40,6 +41,15 @@ export default function VendorModal({ isOpen, onClose, vendor, onSave }: VendorM
   const [openingBalanceType, setOpeningBalanceType] = useState<"Credit" | "Debit">("Credit");
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [shopProfile, setShopProfile] = useState<any>(null);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([
+    "General Supplier",
+    "Oil Companies",
+    "Spare Parts / Filters",
+    "Local Distributors",
+    "Import Suppliers",
+    "Cash Vendor",
+    "Credit Vendor"
+  ]);
 
   useEffect(() => {
     const fetchShopProfile = async () => {
@@ -51,8 +61,20 @@ export default function VendorModal({ isOpen, onClose, vendor, onSave }: VendorM
         console.error(e);
       }
     };
+    const fetchCats = async () => {
+      try {
+        const res = await fetch("/api/categories?type=vendor&t=" + Date.now());
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
+          setAvailableCategories(json.data.map((c: any) => c.name));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
     if (isOpen) {
       fetchShopProfile();
+      fetchCats();
     }
   }, [isOpen]);
 
@@ -63,6 +85,7 @@ export default function VendorModal({ isOpen, onClose, vendor, onSave }: VendorM
       setFormData({
         name: vendor.name || "",
         type: vendor.type || "Supplier",
+        category: vendor.category || "General Supplier",
         contactPerson: vendor.contactPerson || "",
         email: vendor.email || "",
         phone: vendor.phone || "",
@@ -88,6 +111,7 @@ export default function VendorModal({ isOpen, onClose, vendor, onSave }: VendorM
       setFormData({
         name: "",
         type: "Supplier",
+        category: "General Supplier",
         contactPerson: "",
         email: "",
         phone: "",
@@ -162,7 +186,7 @@ export default function VendorModal({ isOpen, onClose, vendor, onSave }: VendorM
         {/* Basic Information */}
         <section className="space-y-6">
           <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">Basic Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Vendor Name *</label>
               <input
@@ -175,7 +199,24 @@ export default function VendorModal({ isOpen, onClose, vendor, onSave }: VendorM
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Vendor Type *</label>
+              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Category</label>
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 dark:border-slate-700 rounded-xl text-sm font-bold focus:bg-white dark:focus:bg-slate-900 outline-none transition-all dark:text-white"
+              >
+                {availableCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+                {formData.category && !availableCategories.includes(formData.category) && (
+                  <option value={formData.category}>{formData.category}</option>
+                )}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Vendor Type</label>
               <input
                 list="vendor-types"
                 value={formData.type}

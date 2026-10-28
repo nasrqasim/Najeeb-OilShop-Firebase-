@@ -1,58 +1,55 @@
 "use client";
 import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
-
 import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
-import { Download, Printer, Play, DollarSign, Banknote, CreditCard, Hash, Search, FileSpreadsheet } from "lucide-react";
+import { Download, Printer, Play, DollarSign, Banknote, CreditCard, Hash, Search, FileSpreadsheet, RotateCcw } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
 import { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 export default function CollectionReportPage() {
+  const [rawCash, setRawCash] = useState<any[]>([]);
+  const [rawBank, setRawBank] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+
+  // Filters
+  const [dateFrom, setDateFrom] = useState(getStartOfMonthStr());
+  const [dateTo, setDateTo] = useState(getCurrentDateStr());
+  const [mode, setMode] = useState("All");
+  const [selectedCustomer, setSelectedCustomer] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true);
       try {
-        const [cashRes, bankRes] = await Promise.all([
+        const [cashRes, bankRes, customersRes] = await Promise.all([
           fetch('/api/cash-receipts'),
-          fetch('/api/bank-receipts')
+          fetch('/api/bank-receipts'),
+          fetch('/api/parties?type=customer')
         ]);
-        const [cashJson, bankJson] = await Promise.all([
+        const [cashJson, bankJson, customersJson] = await Promise.all([
           cashRes.json(),
-          bankRes.json()
+          bankRes.json(),
+          customersRes.json()
         ]);
 
-        let collections = [];
-        if (cashJson.ok && cashJson.data) {
-          collections.push(...cashJson.data.map((c: any) => ({
-            id: c._id,
-            date: new Date(c.date).toLocaleDateString(),
-            docNo: c.receiptNumber || "N/A",
-            type: "CR",
-            customer: c.party || "N/A",
-            amount: c.amount,
-            mode: "Cash Receipt",
-            status: c.status || "Posted",
-            statusColor: "text-emerald-600 bg-emerald-50"
-          })));
-        }
-        if (bankJson.ok && bankJson.data) {
-          collections.push(...bankJson.data.map((c: any) => ({
-            id: c._id,
-            date: new Date(c.date).toLocaleDateString(),
-            docNo: c.receiptNumber || "N/A",
-            type: "BR",
-            customer: c.party || "N/A",
-            amount: c.amount,
-            mode: "Bank Receipt",
-            status: c.status || "Posted",
-            statusColor: "text-emerald-600 bg-emerald-50"
-          })));
-        }
-        setData(collections.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        if (customersJson.ok && customersJson.data) setCustomers(customersJson.data);
+
+        const cashList = cashJson.ok && Array.isArray(cashJson.data) ? cashJson.data : [];
+        const bankList = bankJson.ok && Array.isArray(bankJson.data) ? bankJson.data : [];
+
+        setRawCash(cashList);
+        setRawBank(bankList);
+
+        processCollections(cashList, bankList, {
+          dateFrom: getStartOfMonthStr(),
+          dateTo: getCurrentDateStr(),
+          mode: "All",
+          selectedCustomer: "All",
+          searchQuery: ""
+        });
       } catch (error) {
         console.error("Error fetching collections:", error);
       } finally {
@@ -61,6 +58,98 @@ export default function CollectionReportPage() {
     }
     fetchData();
   }, []);
+
+  function processCollections(cashList: any[], bankList: any[], filters: any) {
+    let combined: any[] = [];
+
+    if (filters.mode === "All" || filters.mode === "CR") {
+      cashList.forEach((c: any) => {
+        combined.push({
+          id: c._id,
+          rawDate: c.date,
+          date: new Date(c.date || Date.now()).toLocaleDateString(),
+          docNo: c.receiptNumber || c.voucherNo || "N/A",
+          type: "CR",
+          customerId: c.partyId?._id || c.partyId?.id || c.partyId,
+          customer: c.partyId?.name || c.party || "Customer",
+          amount: Number(c.amount) || 0,
+          mode: "Cash Receipt",
+          status: c.status || "Posted",
+          statusColor: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20"
+        });
+      });
+    }
+
+    if (filters.mode === "All" || filters.mode === "BR") {
+      bankList.forEach((c: any) => {
+        combined.push({
+          id: c._id,
+          rawDate: c.date,
+          date: new Date(c.date || Date.now()).toLocaleDateString(),
+          docNo: c.receiptNumber || c.voucherNo || "N/A",
+          type: "BR",
+          customerId: c.partyId?._id || c.partyId?.id || c.partyId,
+          customer: c.partyId?.name || c.party || "Customer",
+          amount: Number(c.amount) || 0,
+          mode: "Bank Receipt",
+          status: c.status || "Posted",
+          statusColor: "text-blue-600 bg-blue-50 dark:bg-blue-950/20"
+        });
+      });
+    }
+
+    let filtered = combined.filter((r: any) => {
+      if (r.rawDate) {
+        const d = r.rawDate.substring(0, 10);
+        if (filters.dateFrom && d < filters.dateFrom) return false;
+        if (filters.dateTo && d > filters.dateTo) return false;
+      }
+
+      if (filters.selectedCustomer !== "All") {
+        if (r.customerId !== filters.selectedCustomer && r.customer !== filters.selectedCustomer) {
+          return false;
+        }
+      }
+
+      if (filters.searchQuery) {
+        const q = filters.searchQuery.toLowerCase();
+        if (!r.docNo.toLowerCase().includes(q) && !r.customer.toLowerCase().includes(q)) {
+          return false;
+        }
+      }
+
+      return true;
+    }).sort((a, b) => new Date(b.rawDate || 0).getTime() - new Date(a.rawDate || 0).getTime());
+
+    setData(filtered);
+  }
+
+  const handleGenerate = () => {
+    processCollections(rawCash, rawBank, {
+      dateFrom,
+      dateTo,
+      mode,
+      selectedCustomer,
+      searchQuery
+    });
+  };
+
+  const handleReset = () => {
+    const defaultFrom = getStartOfMonthStr();
+    const defaultTo = getCurrentDateStr();
+    setDateFrom(defaultFrom);
+    setDateTo(defaultTo);
+    setMode("All");
+    setSelectedCustomer("All");
+    setSearchQuery("");
+    processCollections(rawCash, rawBank, {
+      dateFrom: defaultFrom,
+      dateTo: defaultTo,
+      mode: "All",
+      selectedCustomer: "All",
+      searchQuery: ""
+    });
+  };
 
   const totalCollected = data.reduce((s, r) => s + r.amount, 0);
   const cashTotal = data.filter(r => r.type === 'CR').reduce((s, r) => s + r.amount, 0);
@@ -74,230 +163,156 @@ export default function CollectionReportPage() {
   ];
 
   const Filters = (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Financial Year</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>Financial Year 2025-26...</option>
+    <div className="flex flex-col gap-3 w-full">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 w-full">
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date From</label>
+          <input 
+            type="date" 
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date To</label>
+          <input 
+            type="date" 
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Collection Mode</label>
+          <select 
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Modes (Cash & Bank)</option>
+            <option value="CR">Cash Receipts (CR)</option>
+            <option value="BR">Bank Receipts (BR)</option>
           </select>
         </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date From</label>
-          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue={getStartOfMonthStr()} />
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date To</label>
-          <input type="date" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue={getCurrentDateStr()} />
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Customer</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Customers</option>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Customer</label>
+          <select 
+            value={selectedCustomer}
+            onChange={(e) => setSelectedCustomer(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Customers</option>
+            {customers.map((c: any) => (
+              <option key={c._id || c.id} value={c._id || c.id}>
+                {c.name || c.companyName} {c.code ? `(${c.code})` : ''}
+              </option>
+            ))}
           </select>
         </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Region</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Regions</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Area</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Areas</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Salesperson</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Salespersons</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Payment Type</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Types</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Status</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All</option>
-          </select>
-        </div>
-        <div className="space-y-1 lg:col-span-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Search</label>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Search</label>
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500" size={12} />
-            <input type="text" placeholder="Doc # or customer..." className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-maroon-800/10 font-medium transition-all" />
+            <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Receipt # / Customer..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+            />
           </div>
         </div>
       </div>
-      <div className="flex justify-end gap-2 mt-2">
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 flex items-center justify-center gap-1.5">
-          <Download size={14} /> Export CSV
-        </button>
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 flex items-center justify-center gap-1.5">
-          <Printer size={14} /> Print
-        </button>
+      
+      <div className="flex justify-end gap-2 shrink-0">
         <button 
-          className="px-3 py-2 bg-maroon-800 text-white rounded-lg text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
-          onClick={() => setHasSearched(!hasSearched)}
+          onClick={handleGenerate}
+          className="px-3 py-1.5 bg-maroon-800 text-white rounded-lg text-xs font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
         >
           <Play size={14} /> Generate Report
+        </button>
+        <button 
+          onClick={handleReset}
+          className="px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-center gap-1.5"
+        >
+          <RotateCcw size={14} /> Reset
         </button>
       </div>
     </div>
   );
 
-  const lineData = Object.entries(data.reduce((acc: any, curr) => {
-    const d = curr.date;
-    if (!acc[d]) acc[d] = { name: d, bank: 0, cash: 0 };
-    if (curr.type === 'BR') acc[d].bank += curr.amount;
-    else acc[d].cash += curr.amount;
-    return acc;
-  }, {})).map(([_, v]) => v).slice(-10);
-
-  const barData = Object.entries(data.reduce((acc: any, curr) => {
-    if (!acc[curr.customer]) acc[curr.customer] = { name: curr.customer, value: 0 };
-    acc[curr.customer].value += curr.amount;
-    return acc;
-  }, {})).map(([_, v]) => v).sort((a: any, b: any) => b.value - a.value).slice(0, 10);
-
-  const pieData = [
-    { name: `Cash (${(totalCollected > 0 ? (cashTotal / totalCollected * 100).toFixed(0) : 0)}%)`, value: cashTotal, color: '#10b981' },
-    { name: `Bank (${(totalCollected > 0 ? (bankTotal / totalCollected * 100).toFixed(0) : 0)}%)`, value: bankTotal, color: '#3b82f6' },
-  ].filter(d => d.value > 0);
-
   return (
     <ERPReportLayout
       title="Collection Report"
-      description="Detailed tracking of all customer payments (Cash and Bank receipts) and collection trends."
+      description="Consolidated log of customer collections across cash and bank receipts."
       stats={stats}
       filters={Filters}
       actions={[
-        { label: "Print Collections", onClick: printPage, icon: Printer },
+        { label: "Print Report", onClick: printPage, icon: Printer },
         { label: "Export Excel", onClick: () => exportToExcel(data, "CollectionReport.xlsx"), icon: FileSpreadsheet },
       ]}
     >
       <div className="space-y-6">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <div className="w-8 h-8 border-4 border-maroon-800 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-sm font-bold">Fetching live collection records...</p>
+        <div className="px-4">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Collection Records</h3>
+            <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-xs font-bold">{data.length} receipts</span>
           </div>
-        ) : data.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50/50 mx-4">
-            <DollarSign size={48} className="mb-4 opacity-30" />
-            <p className="text-sm font-bold text-slate-600 dark:text-slate-300">No collection transactions found for the selected criteria</p>
-          </div>
-        ) : (
-          <>
-            <div className="px-4">
-              <div className="flex items-center gap-2 mb-4">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Collection Transactions</h3>
-                <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-xs font-bold">{data.length} records</span>
-              </div>
-              <table className="w-full text-left border-collapse border-b border-slate-200 dark:border-slate-800">
-                <thead className="bg-slate-50 dark:bg-slate-800/50 border-y border-slate-200 dark:border-slate-800">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse border-b border-slate-200 dark:border-slate-800 min-w-max">
+              <thead className="bg-slate-50 dark:bg-slate-800/50 border-y border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-8">#</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Date</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Voucher #</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Type</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Mode</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Amount (Rs)</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {isLoading ? (
                   <tr>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Doc #</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Type</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Customer</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Amount</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Payment Mode</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Status</th>
+                    <td colSpan={8} className="text-center py-8 text-xs text-slate-400">Loading collection records...</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data.map((row: any) => (
-                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50/50 transition-colors">
+                ) : data.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-xs text-slate-400">No collection records found matching the selected filters.</td>
+                  </tr>
+                ) : (
+                  data.map((row: any, i: number) => (
+                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="px-4 py-3 text-[11px] font-medium text-slate-400">{i + 1}</td>
                       <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{row.date}</td>
-                      <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 cursor-pointer hover:underline">{row.docNo}</td>
-                      <td className="px-4 py-3 text-[11px] text-center">
-                        <span className={`px-1.5 py-0.5 text-[8px] font-black border rounded ${row.type === 'CR' ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'border-blue-200 bg-blue-50 text-blue-600'}`}>
-                          {row.type}
-                        </span>
+                      <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 dark:text-rose-400">{row.docNo}</td>
+                      <td className="px-4 py-3 text-[11px]">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black ${
+                          row.type === 'CR' ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 border border-emerald-200' : 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 border border-blue-200'
+                        }`}>{row.type}</span>
                       </td>
-                      <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{row.customer}</td>
-                      <td className="px-4 py-3 text-[11px] font-black text-slate-800 dark:text-slate-100 text-right">{row.amount.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{row.mode}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${row.statusColor}`}>
-                          {row.status}
-                        </span>
+                      <td className="px-4 py-3 text-[11px] font-bold text-slate-800 dark:text-slate-100">{row.customer}</td>
+                      <td className="px-4 py-3 text-[11px] text-slate-500">{row.mode}</td>
+                      <td className="px-4 py-3 text-[11px] font-black text-emerald-600 text-right">Rs. {row.amount.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-[11px] text-center">
+                        <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 border border-emerald-200 rounded text-[10px] font-bold">{row.status}</span>
                       </td>
                     </tr>
-                  ))}
+                  ))
+                )}
+                {data.length > 0 && (
                   <tr className="bg-slate-50 dark:bg-slate-800/50 font-black">
-                    <td colSpan={4} className="px-4 py-3 text-right text-[10px] uppercase tracking-widest text-slate-800 dark:text-slate-100">TOTAL ({data.length} records)</td>
-                    <td className="px-4 py-3 text-[11px] text-right">{totalCollected.toLocaleString()}</td>
-                    <td colSpan={2}></td>
+                    <td colSpan={6} className="px-4 py-3 text-right text-[10px] uppercase tracking-widest text-slate-800 dark:text-slate-100">TOTAL ({data.length} collections)</td>
+                    <td className="px-4 py-3 text-[11px] text-right text-emerald-600">Rs. {totalCollected.toLocaleString()}</td>
+                    <td></td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 md:col-span-2">
-                <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6">Collection Trend (Monthly)</h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={lineData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" tick={{fontSize: 10}} />
-                      <YAxis tick={{fontSize: 10}} />
-                      <RechartsTooltip />
-                      <Line type="monotone" dataKey="bank" name="Bank Collections" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 4 }} />
-                      <Line type="monotone" dataKey="cash" name="Cash Collections" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 4 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6">Cash vs Bank Collections</h3>
-                <div className="h-64 flex items-center justify-center relative">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {pieData.map((entry: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6">Top Customers by Collection Amount</h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 30, left: 60, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" tick={{fontSize: 10}} />
-                      <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={80} />
-                      <RechartsTooltip />
-                      <Bar dataKey="value" fill="#881337" barSize={20} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </ERPReportLayout>
   );

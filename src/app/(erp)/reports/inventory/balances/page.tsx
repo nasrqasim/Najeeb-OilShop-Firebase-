@@ -11,97 +11,109 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 export default function InventoryBalancesReportPage() {
   const [data, setData] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [fromDate, setFromDate] = useState(getStartOfMonthStr());
   const [toDate, setToDate] = useState(getCurrentDateStr());
+  const [selectedGroup, setSelectedGroup] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(true);
 
-  const filteredData = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return data;
-    return data.filter(
-      (r) =>
-        String(r.code || "").toLowerCase().includes(q) ||
-        String(r.name || "").toLowerCase().includes(q)
-    );
-  }, [data, searchQuery]);
-
   useEffect(() => {
-    // Fetch items for conversion values
-    const fetchItems = async () => {
+    const fetchCats = async () => {
       try {
-        const res = await fetch('/api/items');
+        const res = await fetch('/api/categories');
         const json = await res.json();
-        if (json.ok) setItems(json.data);
+        if (json.ok && Array.isArray(json.data)) setCategories(json.data);
       } catch (e) {
         console.error(e);
       }
     };
-    fetchItems();
+    fetchCats();
   }, []);
 
-  useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const [itemsRes, salesRes, purRes] = await Promise.all([
-          fetch('/api/items'),
-          fetch('/api/sales'),
-          fetch('/api/purchases')
-        ]);
-        const [itemsJson, salesJson, purJson] = await Promise.all([
-          itemsRes.json(),
-          salesRes.json(),
-          purRes.json()
-        ]);
+  const filteredData = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return data.filter((r) => {
+      const matchesSearch = !q ||
+        String(r.code || "").toLowerCase().includes(q) ||
+        String(r.name || "").toLowerCase().includes(q);
+      const matchesCat = selectedCategory === "All" || r.category === selectedCategory;
+      const matchesGrp = selectedGroup === "All" || r.group === selectedGroup || r.category === selectedGroup;
+      return matchesSearch && matchesCat && matchesGrp;
+    });
+  }, [data, searchQuery, selectedCategory, selectedGroup]);
 
-        if (itemsJson.ok && salesJson.ok && purJson.ok) {
-          const items = itemsJson.data;
-          const sales = salesJson.data;
-          const purchases = purJson.data;
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [itemsRes, salesRes, purRes, catsRes] = await Promise.all([
+        fetch('/api/items'),
+        fetch('/api/sales'),
+        fetch('/api/purchases'),
+        fetch('/api/categories')
+      ]);
+      const [itemsJson, salesJson, purJson, catsJson] = await Promise.all([
+        itemsRes.json(),
+        salesRes.json(),
+        purRes.json(),
+        catsRes.json()
+      ]);
 
-          const balancedData = items.map((item: any) => {
-            // Find all sales for this item
-            const itemSales = sales.flatMap((s: any) => 
-              (s.lines || []).filter((l: any) => (l.itemId?._id || l.itemId) === item._id)
-            );
-            const qtyOut = itemSales.reduce((sum: number, l: any) => sum + lineStockQty(l), 0);
+      const catList = catsJson.ok && Array.isArray(catsJson.data) ? catsJson.data : [];
+      if (catList.length > 0) setCategories(catList);
 
-            // Find all purchases for this item
-            const itemPurchases = purchases.flatMap((p: any) => 
-              (p.lines || []).filter((l: any) => (l.itemId?._id || l.itemId) === item._id)
-            );
-            const qtyIn = itemPurchases.reduce((sum: number, l: any) => sum + lineStockQty(l), 0);
+      if (itemsJson.ok && salesJson.ok && purJson.ok) {
+        const items = itemsJson.data;
+        const sales = salesJson.data;
+        const purchases = purJson.data;
 
-            // Opening stock is current stock - in + out (simplified)
-            // But we have stockQtyCartons as "current" stock
-            const closing = item.stockQtyCartons || 0;
-            const opening = closing - qtyIn + qtyOut;
+        const balancedData = items.map((item: any) => {
+          const itemSales = sales.flatMap((s: any) => 
+            (s.lines || []).filter((l: any) => (l.itemId?._id || l.itemId) === item._id)
+          );
+          const qtyOut = itemSales.reduce((sum: number, l: any) => sum + lineStockQty(l), 0);
 
-            return {
-              id: item._id,
-              code: item.code,
-              name: item.name,
-              category: "General", // Placeholder if category not populated
-              opening,
-              in: qtyIn,
-              out: qtyOut,
-              closing,
-              rate: item.purchaseRate || 0,
-              value: closing * (item.purchaseRate || 0)
-            };
-          });
+          const itemPurchases = purchases.flatMap((p: any) => 
+            (p.lines || []).filter((l: any) => (l.itemId?._id || l.itemId) === item._id)
+          );
+          const qtyIn = itemPurchases.reduce((sum: number, l: any) => sum + lineStockQty(l), 0);
 
-          setData(balancedData);
-        }
-      } catch (e) {
-        console.error("Error fetching balance data:", e);
-      } finally {
-        setIsLoading(false);
+          const closing = item.stockQtyCartons || 0;
+          const opening = closing - qtyIn + qtyOut;
+
+          const mainCat = catList.find((c: any) => String(c._id || c.id) === String(item.mainCategoryId));
+          const subCat = catList.find((c: any) => String(c._id || c.id) === String(item.subCategoryId));
+          const groupName = mainCat?.name || item.category || "General";
+          const catName = subCat?.name || mainCat?.name || item.category || "General";
+
+          return {
+            id: item._id,
+            code: item.code,
+            name: item.name,
+            group: groupName,
+            category: catName,
+            opening,
+            in: qtyIn,
+            out: qtyOut,
+            closing,
+            rate: item.purchaseRate || 0,
+            value: closing * (item.purchaseRate || 0)
+          };
+        });
+
+        setData(balancedData);
       }
+    } catch (e) {
+      console.error("Error fetching balance data:", e);
+    } finally {
+      setIsLoading(false);
     }
-    fetchData();
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   const totalOpeningValue = filteredData.reduce((s, r) => s + (r.opening * r.rate), 0);
@@ -129,22 +141,29 @@ export default function InventoryBalancesReportPage() {
           <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" />
         </div>
         <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Category</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Categories</option>
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Product Group</label>
+          <select
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Groups</option>
+            {Array.from(new Set(data.map((d) => d.group).filter(Boolean))).map((grp: any) => (
+              <option key={grp} value={grp}>{grp}</option>
+            ))}
           </select>
         </div>
         <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Sub Category</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Sub Categories</option>
-          </select>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Group By</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>No Grouping</option>
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Category</label>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Categories</option>
+            {categories.map((c: any) => (
+              <option key={c._id || c.id} value={c.name}>{c.name}</option>
+            ))}
           </select>
         </div>
         <div className="space-y-1 flex items-end">
@@ -164,7 +183,7 @@ export default function InventoryBalancesReportPage() {
         </button>
         <button 
           className="px-3 py-2 bg-maroon-800 text-white rounded-lg text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
-          onClick={() => setHasSearched(!hasSearched)}
+          onClick={loadData}
         >
           <Play size={14} /> Generate
         </button>

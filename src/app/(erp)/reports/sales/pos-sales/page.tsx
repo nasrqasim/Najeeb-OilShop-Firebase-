@@ -1,40 +1,48 @@
 "use client";
 import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
-
 import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
-import { Download, Printer, Play, ShoppingCart, RotateCcw as RotateLeft, DollarSign, TrendingUp, CreditCard, Clock, RefreshCw, FileSpreadsheet } from "lucide-react";
+import { Download, Printer, Play, ShoppingCart, RotateCcw as RotateLeft, DollarSign, TrendingUp, CreditCard, Clock, RefreshCw, FileSpreadsheet, RotateCcw, Search } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
 import { useState, useEffect } from "react";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, ComposedChart, Legend } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 export default function POSSalesReportPage() {
+  const [rawSales, setRawSales] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+
+  // Filters
+  const [dateFrom, setDateFrom] = useState(getStartOfMonthStr());
+  const [dateTo, setDateTo] = useState(getCurrentDateStr());
+  const [paymentMethod, setPaymentMethod] = useState("All");
+  const [selectedCashier, setSelectedCashier] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true);
       try {
-        const res = await fetch('/api/sales');
-        const json = await res.json();
-        if (json.ok && json.data) {
-          // Filter for POS-like sales (Cash or Card)
-          const posSales = json.data.filter((s: any) => 
-            (s.paymentMethod === 'Cash' || s.paymentMethod === 'Card') && s.type === 'sale'
-          ).map((s: any) => ({
-            id: s._id,
-            date: new Date(s.date).toLocaleString(),
-            receipt: s.invoiceNo || s.docNo || "N/A",
-            terminal: "Term-1", // Placeholder or from metadata if available
-            cashier: s.employeeId?.name || "System",
-            gross: s.subTotal || 0,
-            tax: s.taxAmount || 0,
-            net: s.totalAmount || 0,
-            payment: s.paymentMethod || "Cash",
-            hour: new Date(s.date).getHours() + ":00"
-          }));
-          setData(posSales);
+        const [salesRes, empRes] = await Promise.all([
+          fetch('/api/sales'),
+          fetch('/api/employees')
+        ]);
+        const [salesJson, empJson] = await Promise.all([
+          salesRes.json(),
+          empRes.json()
+        ]);
+
+        if (empJson.ok && empJson.data) setEmployees(empJson.data);
+
+        if (salesJson.ok && salesJson.data) {
+          setRawSales(salesJson.data);
+          filterAndProcess(salesJson.data, {
+            dateFrom: getStartOfMonthStr(),
+            dateTo: getCurrentDateStr(),
+            paymentMethod: "All",
+            selectedCashier: "All",
+            searchQuery: ""
+          });
         }
       } catch (error) {
         console.error("Error fetching POS sales:", error);
@@ -45,6 +53,82 @@ export default function POSSalesReportPage() {
     fetchData();
   }, []);
 
+  function filterAndProcess(sales: any[], filters: any) {
+    let filtered = sales.filter((s: any) => {
+      // Must be POS or cash/card direct sale
+      const isPos = s.type === 'pos' || s.type === 'pos_counter_sale' || s.paymentMethod === 'Cash' || s.paymentMethod === 'Card';
+      if (!isPos) return false;
+
+      if (s.date) {
+        const d = s.date.substring(0, 10);
+        if (filters.dateFrom && d < filters.dateFrom) return false;
+        if (filters.dateTo && d > filters.dateTo) return false;
+      }
+
+      if (filters.paymentMethod !== "All") {
+        const pm = (s.paymentMethod || "Cash").toLowerCase();
+        if (pm !== filters.paymentMethod.toLowerCase()) return false;
+      }
+
+      if (filters.selectedCashier !== "All") {
+        const cId = s.employeeId?._id || s.employeeId?.id || s.employeeId;
+        const cName = s.employeeId?.name || "";
+        if (cId !== filters.selectedCashier && cName !== filters.selectedCashier) return false;
+      }
+
+      if (filters.searchQuery) {
+        const q = filters.searchQuery.toLowerCase();
+        const docNo = (s.invoiceNo || s.docNo || "").toLowerCase();
+        const cust = (s.partyId?.name || s.customerName || "").toLowerCase();
+        if (!docNo.includes(q) && !cust.includes(q)) return false;
+      }
+
+      return true;
+    });
+
+    const transformed = filtered.map((s: any) => ({
+      id: s._id,
+      date: new Date(s.date || Date.now()).toLocaleString(),
+      receipt: s.invoiceNo || s.docNo || "N/A",
+      terminal: s.terminal || "Counter-1",
+      cashier: s.employeeId?.name || "Cashier",
+      gross: s.subTotal || s.totalAmount || 0,
+      tax: s.taxAmount || 0,
+      net: s.totalAmount || 0,
+      payment: s.paymentMethod || "Cash",
+      hour: new Date(s.date || Date.now()).getHours() + ":00"
+    }));
+
+    setData(transformed);
+  }
+
+  const handleGenerate = () => {
+    filterAndProcess(rawSales, {
+      dateFrom,
+      dateTo,
+      paymentMethod,
+      selectedCashier,
+      searchQuery
+    });
+  };
+
+  const handleReset = () => {
+    const defaultFrom = getStartOfMonthStr();
+    const defaultTo = getCurrentDateStr();
+    setDateFrom(defaultFrom);
+    setDateTo(defaultTo);
+    setPaymentMethod("All");
+    setSelectedCashier("All");
+    setSearchQuery("");
+    filterAndProcess(rawSales, {
+      dateFrom: defaultFrom,
+      dateTo: defaultTo,
+      paymentMethod: "All",
+      selectedCashier: "All",
+      searchQuery: ""
+    });
+  };
+
   const totalSales = data.reduce((s, r) => s + r.net, 0);
   const cashCollected = data.filter(r => r.payment === 'Cash').reduce((s, r) => s + r.net, 0);
   const cardCollected = data.filter(r => r.payment === 'Card').reduce((s, r) => s + r.net, 0);
@@ -52,182 +136,165 @@ export default function POSSalesReportPage() {
 
   const stats = [
     { title: "Total Sales", value: `Rs. ${totalSales.toLocaleString()}`, subtitle: `${data.length} transactions`, icon: ShoppingCart, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
-    { title: "Total Returns", value: "Rs. 0", subtitle: "0 transactions", icon: RotateLeft, iconColor: "text-rose-600", iconBg: "bg-rose-50" },
-    { title: "Net Sales", value: `Rs. ${totalSales.toLocaleString()}`, icon: DollarSign, iconColor: "text-blue-600", iconBg: "bg-blue-50", valueColor: "text-blue-600" },
-    { title: "Average Sale", value: `Rs. ${avgSale.toLocaleString()}`, icon: TrendingUp, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
-    
-    // Payment Method Breakdown
+    { title: "Net Revenue", value: `Rs. ${totalSales.toLocaleString()}`, icon: DollarSign, iconColor: "text-blue-600", iconBg: "bg-blue-50", valueColor: "text-blue-600" },
+    { title: "Average Ticket", value: `Rs. ${Math.round(avgSale).toLocaleString()}`, icon: TrendingUp, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
     { title: "Cash Collected", value: `Rs. ${cashCollected.toLocaleString()}`, icon: DollarSign, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
     { title: "Card Collected", value: `Rs. ${cardCollected.toLocaleString()}`, icon: CreditCard, iconColor: "text-blue-600", iconBg: "bg-blue-50" },
-    { title: "On Credit", value: "Rs. 0", icon: DollarSign, iconColor: "text-amber-600", iconBg: "bg-amber-50" },
   ];
 
   const Filters = (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="flex flex-col gap-3 w-full">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 w-full">
         <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date From</label>
-          <input type="date" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue={getStartOfMonthStr()} />
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date From</label>
+          <input 
+            type="date" 
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+          />
         </div>
         <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date To</label>
-          <input type="date" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" defaultValue={getCurrentDateStr()} />
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date To</label>
+          <input 
+            type="date" 
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+          />
         </div>
         <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Region</label>
-          <select className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Regions</option>
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Payment Method</label>
+          <select 
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Methods</option>
+            <option value="Cash">Cash</option>
+            <option value="Card">Card</option>
           </select>
         </div>
         <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Area</label>
-          <select className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Areas</option>
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cashier</label>
+          <select 
+            value={selectedCashier}
+            onChange={(e) => setSelectedCashier(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Cashiers</option>
+            {employees.map((emp: any) => (
+              <option key={emp._id || emp.id} value={emp._id || emp.id}>
+                {emp.name}
+              </option>
+            ))}
           </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Search</label>
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Receipt / Customer..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+            />
+          </div>
         </div>
       </div>
       
-      <div className="flex justify-end gap-2 mt-2">
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 flex items-center justify-center gap-1.5">
-          <Download size={14} /> Export CSV
-        </button>
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 flex items-center justify-center gap-1.5">
-          <Printer size={14} /> Print
+      <div className="flex justify-end gap-2 shrink-0">
+        <button 
+          onClick={handleGenerate}
+          className="px-3 py-1.5 bg-maroon-800 text-white rounded-lg text-xs font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
+        >
+          <Play size={14} /> Generate Report
         </button>
         <button 
-          className="px-4 py-2 bg-maroon-800 text-white rounded-lg text-xs font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
-          onClick={() => setHasSearched(!hasSearched)}
+          onClick={handleReset}
+          className="px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-center gap-1.5"
         >
-          <RefreshCw size={14} /> Refresh
+          <RotateCcw size={14} /> Reset
         </button>
       </div>
     </div>
   );
 
-  const pieData = [
-    { name: 'Cash', value: cashCollected, color: '#10b981' },
-    { name: 'Card', value: cardCollected, color: '#3b82f6' },
-  ].filter(d => d.value > 0);
-
-  const hourlyData = Object.entries(data.reduce((acc: any, curr) => {
-    if (!acc[curr.hour]) acc[curr.hour] = { hour: curr.hour, sales: 0 };
-    acc[curr.hour].sales += curr.net;
-    return acc;
-  }, {})).map(([_, v]) => v).sort((a: any, b: any) => parseInt(a.hour) - parseInt(b.hour));
-
   return (
     <ERPReportLayout
-      title="POS Sales Report"
-      description="Real-time retail sales tracking, payment methods, and terminal activity."
+      title="POS Sales"
+      description="Real-time register summary and breakdown of retail counter point-of-sale transactions."
       stats={stats}
       filters={Filters}
       actions={[
-        { label: "Print POS Report", onClick: printPage, icon: Printer },
+        { label: "Print Report", onClick: printPage, icon: Printer },
         { label: "Export Excel", onClick: () => exportToExcel(data, "POSSales.xlsx"), icon: FileSpreadsheet },
       ]}
     >
       <div className="space-y-6">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <div className="w-8 h-8 border-4 border-maroon-800 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-sm font-bold">Fetching live POS sales...</p>
+        <div className="px-4">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">POS Receipts</h3>
+            <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-xs font-bold">{data.length} transactions</span>
           </div>
-        ) : data.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50/50 mx-4">
-            <ShoppingCart size={48} className="mb-4 opacity-30" />
-            <p className="text-sm font-bold text-slate-600 dark:text-slate-300">No POS transactions found for the selected date range</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4">
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6">Sales by Payment Method</h3>
-                <div className="h-64 flex items-center justify-center relative">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {pieData.map((entry: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px' }}/>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 mb-6">Hourly Sales Trend</h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={hourlyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="hour" tick={{fontSize: 10}} />
-                      <YAxis tick={{fontSize: 10}} />
-                      <RechartsTooltip />
-                      <Line type="monotone" dataKey="sales" name="Sales Amount" stroke="#881337" strokeWidth={2} dot={{ fill: '#881337', r: 4 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-4">
-              <div className="flex items-center gap-2 mb-4">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">POS Receipts</h3>
-                <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-xs font-bold">{data.length} records</span>
-              </div>
-              <table className="w-full text-left border-collapse border-b border-slate-200 dark:border-slate-800">
-                <thead className="bg-slate-50 dark:bg-slate-800/50 border-y border-slate-200 dark:border-slate-800">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse border-b border-slate-200 dark:border-slate-800 min-w-max">
+              <thead className="bg-slate-50 dark:bg-slate-800/50 border-y border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-8">#</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Date / Time</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Receipt #</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Terminal</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Cashier</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Gross</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Tax</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Net Amount</th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Payment</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {isLoading ? (
                   <tr>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date/Time</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Receipt #</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Terminal</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Cashier</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Gross</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Tax</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Net Amount</th>
-                    <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Payment Method</th>
+                    <td colSpan={9} className="text-center py-8 text-xs text-slate-400">Loading POS transactions...</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data.map((row: any) => (
-                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50/50 transition-colors">
+                ) : data.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="text-center py-8 text-xs text-slate-400">No POS transactions match the selected filters.</td>
+                  </tr>
+                ) : (
+                  data.map((row: any, i: number) => (
+                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="px-4 py-3 text-[11px] font-medium text-slate-400">{i + 1}</td>
                       <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{row.date}</td>
-                      <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 cursor-pointer hover:underline">{row.receipt}</td>
-                      <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{row.terminal}</td>
-                      <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{row.cashier}</td>
-                      <td className="px-4 py-3 text-[11px] font-black text-slate-800 dark:text-slate-100 text-right">{row.gross.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 text-right">{row.tax.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-[11px] font-black text-blue-600 text-right">{row.net.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${row.payment === 'Cash' ? 'text-emerald-600 bg-emerald-50' : 'text-blue-600 bg-blue-50'}`}>
-                          {row.payment}
-                        </span>
+                      <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 dark:text-rose-400">{row.receipt}</td>
+                      <td className="px-4 py-3 text-[11px] text-slate-500">{row.terminal}</td>
+                      <td className="px-4 py-3 text-[11px] font-medium text-slate-700 dark:text-slate-200">{row.cashier}</td>
+                      <td className="px-4 py-3 text-[11px] font-medium text-slate-600 text-right">{row.gross.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-[11px] font-medium text-slate-500 text-right">{row.tax.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-[11px] font-black text-emerald-600 text-right">Rs. {row.net.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-[11px] text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          row.payment === 'Cash' ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 border border-emerald-200' : 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 border border-blue-200'
+                        }`}>{row.payment}</span>
                       </td>
                     </tr>
-                  ))}
+                  ))
+                )}
+                {data.length > 0 && (
                   <tr className="bg-slate-50 dark:bg-slate-800/50 font-black">
-                    <td colSpan={4} className="px-4 py-3 text-right text-[10px] uppercase tracking-widest text-slate-800 dark:text-slate-100">TOTAL ({data.length} records)</td>
+                    <td colSpan={5} className="px-4 py-3 text-right text-[10px] uppercase tracking-widest text-slate-800 dark:text-slate-100">TOTAL ({data.length} transactions)</td>
                     <td className="px-4 py-3 text-[11px] text-right">{data.reduce((s, r) => s + r.gross, 0).toLocaleString()}</td>
                     <td className="px-4 py-3 text-[11px] text-right">{data.reduce((s, r) => s + r.tax, 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-[11px] text-right text-blue-600">{totalSales.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-[11px] text-right text-emerald-600">Rs. {totalSales.toLocaleString()}</td>
                     <td></td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </ERPReportLayout>
   );

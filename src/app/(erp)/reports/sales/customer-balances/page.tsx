@@ -6,7 +6,9 @@ import { exportToExcel, printPage } from "@/lib/excel";
 import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 import CustomerProfileHistory from "@/components/erp/maintain/CustomerProfileHistory";
+import CategoryManagementModal from "@/components/erp/maintain/CategoryManagementModal";
 import { calculateCustomerBalance } from "@/lib/centralizedBalanceService";
+import { Settings } from "lucide-react";
 
 function formatBalance(val: number) {
   if (val > 0) return { text: `Rs. ${val.toLocaleString()}`, label: "(Debit)", color: "text-rose-600" };
@@ -32,6 +34,25 @@ export default function CustomerBalancesReportPage() {
   const [bankPayments, setBankPayments] = useState<any[]>([]);
 
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [selectedCustomerFilter, setSelectedCustomerFilter] = useState<string>("All");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/categories?type=customer&t=" + Date.now());
+      const json = await res.json();
+      if (json.ok && Array.isArray(json.data)) {
+        setCategories(json.data.map((c: any) => c.name));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     const today = new Date();
@@ -232,6 +253,10 @@ export default function CustomerBalancesReportPage() {
       });
     }
 
+    if (selectedCustomerFilter !== "All") {
+      result = result.filter(r => r.id === selectedCustomerFilter || r.rawParty?._id === selectedCustomerFilter);
+    }
+
     if (q) {
       result = result.filter((r) =>
         String(r.customer || "").toLowerCase().includes(q) ||
@@ -240,7 +265,7 @@ export default function CustomerBalancesReportPage() {
       );
     }
     setFilteredData(result);
-  }, [searchQuery, selectedCategory, data]);
+  }, [searchQuery, selectedCategory, selectedCustomerFilter, data]);
 
   const totalDebit = filteredData.reduce((s, r) => s + r.debit, 0);
   const totalCredit = filteredData.reduce((s, r) => s + r.credit, 0);
@@ -274,8 +299,17 @@ export default function CustomerBalancesReportPage() {
         </div>
         <div className="space-y-1 lg:col-span-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Customer</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Customers</option>
+          <select
+            value={selectedCustomerFilter}
+            onChange={(e) => setSelectedCustomerFilter(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Customers</option>
+            {rawParties.map((p: any) => (
+              <option key={p._id || p.id} value={p._id || p.id}>
+                {p.name || p.companyName}
+              </option>
+            ))}
           </select>
         </div>
         <div className="space-y-1 lg:col-span-1">
@@ -346,17 +380,7 @@ export default function CustomerBalancesReportPage() {
         {/* Category Filter Buttons */}
         <div className="no-print bg-slate-50 dark:bg-slate-800/40 rounded-[2rem] p-4 border border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center mx-4">
           <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mr-2">Categories:</span>
-          {[
-            "All",
-            "Cash Customer",
-            "Credit Customer",
-            "Cash Customer (Jama)",
-            "Credit Customer (Counter)",
-            "Credit Customer Max",
-            "Credit Customer (Haji Gul)",
-            "Credit Customer (Makkah)",
-            "Credit Customer (Radbook)"
-          ].map((cat) => (
+          {["All", ...categories].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
@@ -369,6 +393,15 @@ export default function CustomerBalancesReportPage() {
               {cat}
             </button>
           ))}
+
+          <button
+            onClick={() => setIsCategoryModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-dashed border-maroon-800/40 text-maroon-800 dark:text-rose-400 hover:bg-maroon-50 dark:hover:bg-maroon-950/30 rounded-full text-[10px] font-bold transition-all ml-auto shadow-sm"
+            title="Manage Customer Categories"
+          >
+            <Settings size={12} />
+            <span>Manage Categories</span>
+          </button>
         </div>
 
         {isLoading ? (
@@ -463,6 +496,16 @@ export default function CustomerBalancesReportPage() {
           </>
         )}
       </div>
+
+      <CategoryManagementModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        type="customer"
+        title="Manage Customer Categories"
+        onCategoriesUpdated={() => {
+          fetchCategories();
+        }}
+      />
     </ERPReportLayout>
   );
 }

@@ -316,7 +316,9 @@ export default function LowStockAlertReportPage() {
                           </td>
                           <td className="px-4 py-3 text-[11px] font-black text-amber-600 text-right bg-amber-50/30">{row.reorder}</td>
                           <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 text-right">{row.safety}</td>
-                          <td className={`px-4 py-3 text-[11px] font-black text-right bg-rose-50/30 ${row.gap < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{row.gap}</td>
+                          <td className={`px-4 py-3 text-[11px] font-black text-right bg-rose-50/30 ${row.gap < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {row.gap < 0 ? `${Math.abs(row.gap)} (Need)` : `+${row.gap} (OK)`}
+                          </td>
                           <td className="px-4 py-3 text-center">
                               <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
                                   row.status === 'Negative Stock' ? 'bg-rose-600 text-white shadow-sm' : 

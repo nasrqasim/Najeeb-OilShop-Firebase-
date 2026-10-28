@@ -12,6 +12,8 @@ import {
 import { signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 import WidgetVisibilityPanel, { WidgetKey } from "@/components/dashboard/WidgetVisibilityPanel";
+import ReorderNotificationBell from "@/components/erp/ReorderNotificationBell";
+
 
 interface TopBarProps {
   title: string;
@@ -72,6 +74,7 @@ export default function TopBar({ title, user, onSearchClick, widgetVisibility, o
           >
             <RefreshCw size={20} />
           </button>
+          <ReorderNotificationBell />
           {/* Widget Visibility — only shown on dashboard */}
           {widgetVisibility && onWidgetToggle ? (
             <WidgetVisibilityPanel visibility={widgetVisibility} onToggle={onWidgetToggle} />
