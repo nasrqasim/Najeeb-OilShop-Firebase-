@@ -115,7 +115,7 @@ export default function EmployeesPage() {
     )},
     { header: "Department", accessor: "department" },
     { header: "Designation", accessor: "designation" },
-    { header: "Contact", accessor: "phone" },
+    { header: "Contact", accessor: "phone", render: (val: string, item: any) => item.phone || item.contact || "-" },
     { header: "Status", accessor: "status", render: (val: string) => (
       <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
         val === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"

@@ -235,7 +235,6 @@ export const erpModules: ERPNavItem[] = [
         submenu: [
           { title: "Salary Register", href: "/reports/salary/register", roles: ["admin", "salesman"] },
           { title: "Staff Loan & Advance", href: "/reports/salary/loan-advance", roles: ["admin", "salesman"] },
-          { title: "Statutory Contributions", href: "/reports/salary/statutory", roles: ["admin", "salesman"] },
         ]
       },
     ]

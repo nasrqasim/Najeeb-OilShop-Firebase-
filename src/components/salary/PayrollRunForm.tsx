@@ -19,9 +19,14 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
   });
 
   useEffect(() => {
-    fetch("/api/employees").then(r => r.json()).then(data => {
-      if (data.ok) setEmployees(data.data);
-    });
+    fetch("/api/employees?t=" + Date.now(), { cache: "no-store" })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok && Array.isArray(data.data)) {
+          setEmployees(data.data);
+        }
+      })
+      .catch(err => console.error("Error loading employees for payroll:", err));
   }, []);
 
   const generatePayroll = () => {
@@ -31,9 +36,9 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
       const installment = Number(e.monthlyInstallment || 0);
       const net = Math.max(0, salary - installment);
       return {
-        employeeId: e._id,
+        employeeId: e._id || e.id,
         name: e.name,
-        designation: e.designation,
+        designation: e.designation || "",
         basicSalary: salary,
         allowances: 0,
         deductions: 0,
@@ -46,7 +51,7 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
     setIsGenerated(true);
   };
 
-  const totalAmount = staff.reduce((sum, s) => sum + s.netSalary, 0);
+  const totalAmount = staff.reduce((sum, s) => sum + (Number(s.netSalary) || 0), 0);
 
   const handleSubmit = async (submitStatus: string) => {
     setIsSaving(true);
@@ -66,14 +71,14 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
         body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (json.ok) {
+      if (res.ok && (json.ok || json.data)) {
         onClose();
       } else {
-        alert(json.message || "Failed to save");
+        alert(json.message || json.error || "Failed to save payroll run");
       }
     } catch (e) {
       console.error(e);
-      alert("Error saving record");
+      alert("Error saving payroll run record");
     } finally {
       setIsSaving(false);
     }
@@ -83,7 +88,7 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
     <div className="bg-white dark:bg-slate-900 min-h-screen">
       <div className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
             <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
           </button>
           <div>
@@ -91,14 +96,14 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
           </div>
         </div>
         <div className="flex items-center space-x-3">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 rounded-lg flex items-center">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg flex items-center">
             <X size={16} className="mr-2" /> Cancel
           </button>
           <button type="button" onClick={() => handleSubmit("draft")} disabled={isSaving || !isGenerated} className="px-4 py-2 text-sm font-bold text-white bg-maroon-800 hover:bg-maroon-900 rounded-lg flex items-center shadow-lg transition-all disabled:opacity-50">
             <Save size={16} className="mr-2" /> Save Draft
           </button>
           <button type="button" onClick={() => handleSubmit("posted")} disabled={isSaving || !isGenerated} className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center shadow-lg transition-all disabled:opacity-50">
-            <CheckCircle2 size={16} className="mr-2" /> Save & Post
+            <CheckCircle2 size={16} className="mr-2" /> Save &amp; Post
           </button>
         </div>
       </div>
@@ -108,15 +113,15 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Doc Date *</label>
-              <input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold focus:ring-2 focus:ring-maroon-800/20 transition-all" />
+              <input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold focus:ring-2 focus:ring-maroon-800/20 transition-all dark:text-white" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Payroll Month *</label>
-              <input type="month" value={formData.month} onChange={(e) => setFormData({...formData, month: e.target.value})} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold focus:ring-2 focus:ring-maroon-800/20 transition-all" />
+              <input type="month" value={formData.month} onChange={(e) => setFormData({...formData, month: e.target.value})} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold focus:ring-2 focus:ring-maroon-800/20 transition-all dark:text-white" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Total Working Days</label>
-              <input type="number" value={formData.workingDays} onChange={(e) => setFormData({...formData, workingDays: parseInt(e.target.value) || 0})} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold focus:ring-2 focus:ring-maroon-800/20 transition-all" />
+              <input type="number" value={formData.workingDays} onChange={(e) => setFormData({...formData, workingDays: parseInt(e.target.value) || 0})} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold focus:ring-2 focus:ring-maroon-800/20 transition-all dark:text-white" />
             </div>
             <button onClick={generatePayroll} className="h-[42px] px-6 bg-maroon-800 hover:bg-maroon-900 text-white text-sm font-bold rounded-xl flex items-center justify-center shadow-lg transition-all">
               <Plus size={18} className="mr-2" /> Generate Payroll
@@ -128,7 +133,7 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
           {!isGenerated ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
               <Users size={32} className="text-slate-300 mb-4" />
-              <p className="text-slate-500 font-medium">Click <strong>Generate Payroll</strong> to pre-fill all active staff.</p>
+              <p className="text-slate-500 font-medium">Click <strong>Generate Payroll</strong> to pre-fill all active staff and automatic loan deductions.</p>
             </div>
           ) : (
             <>
@@ -140,37 +145,56 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
                       <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28 text-right">Basic Salary</th>
                       <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28 text-right">Allowances</th>
                       <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28 text-right">Deductions</th>
-                      <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28 text-right">Advances/Loans</th>
+                      <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 text-right">Advances/Loans</th>
                       <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 text-right">Net Payable</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50 font-bold">
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-800 font-bold">
                     {staff.map((s, idx) => {
                       const updateStaffRow = (field: string, val: number) => {
                         const updated = [...staff];
                         const current = { ...updated[idx], [field]: val };
-                        current.netSalary = Math.max(0, (current.basicSalary || 0) + (current.allowances || 0) - (current.deductions || 0) - (current.advances || 0) - (current.loans || 0));
+                        if (field === "loans") {
+                          current.loans = val;
+                        }
+                        const basic = Number(current.basicSalary || 0);
+                        const allow = Number(current.allowances || 0);
+                        const ded = Number(current.deductions || 0);
+                        const loan = Number(current.loans || 0);
+                        const adv = Number(current.advances || 0);
+                        current.netSalary = Math.max(0, basic + allow - ded - loan - adv);
                         updated[idx] = current;
                         setStaff(updated);
                       };
 
+                      const loanDeductionVal = s.loans !== undefined && s.loans !== null && Number(s.loans) > 0 
+                        ? Number(s.loans) 
+                        : (Number(s.advances) || 0);
+
                       return (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="px-6 py-4">
-                            <div className="text-sm font-bold text-slate-900 dark:text-white">{s.name || employees.find(e => e._id === s.employeeId)?.name}</div>
+                            <div className="text-sm font-bold text-slate-900 dark:text-white">
+                              {s.name || employees.find(e => (e._id || e.id) === s.employeeId)?.name}
+                            </div>
+                            {s.designation && (
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{s.designation}</div>
+                            )}
                           </td>
                           <td className="px-4 py-4 text-right">
                             <input
                               type="number"
-                              value={s.basicSalary}
+                              value={s.basicSalary || ""}
+                              placeholder="0"
                               onChange={(e) => updateStaffRow("basicSalary", parseFloat(e.target.value) || 0)}
-                              className="w-full text-right bg-transparent text-sm font-bold border-b border-transparent focus:border-maroon-800 outline-none"
+                              className="w-full text-right bg-transparent text-sm font-bold border-b border-transparent focus:border-maroon-800 outline-none dark:text-white"
                             />
                           </td>
                           <td className="px-4 py-4 text-right">
                             <input
                               type="number"
-                              value={s.allowances}
+                              value={s.allowances || ""}
+                              placeholder="0"
                               onChange={(e) => updateStaffRow("allowances", parseFloat(e.target.value) || 0)}
                               className="w-full text-right bg-transparent text-sm font-bold border-b border-transparent focus:border-maroon-800 outline-none text-emerald-600"
                             />
@@ -178,7 +202,8 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
                           <td className="px-4 py-4 text-right">
                             <input
                               type="number"
-                              value={s.deductions}
+                              value={s.deductions || ""}
+                              placeholder="0"
                               onChange={(e) => updateStaffRow("deductions", parseFloat(e.target.value) || 0)}
                               className="w-full text-right bg-transparent text-sm font-bold border-b border-transparent focus:border-maroon-800 outline-none text-rose-600"
                             />
@@ -186,13 +211,14 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
                           <td className="px-4 py-4 text-right">
                             <input
                               type="number"
-                              value={s.advances}
-                              onChange={(e) => updateStaffRow("advances", parseFloat(e.target.value) || 0)}
-                              className="w-full text-right bg-transparent text-sm font-bold border-b border-transparent focus:border-maroon-800 outline-none text-amber-600"
+                              value={loanDeductionVal > 0 ? loanDeductionVal : ""}
+                              placeholder="0"
+                              onChange={(e) => updateStaffRow("loans", parseFloat(e.target.value) || 0)}
+                              className="w-full text-right bg-transparent text-sm font-black border-b border-transparent focus:border-maroon-800 outline-none text-amber-600"
                             />
                           </td>
                           <td className="px-6 py-4 text-right text-sm font-black text-slate-900 dark:text-white">
-                            PKR {(s.netSalary || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            PKR {(Number(s.netSalary) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       );
@@ -200,10 +226,10 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
                   </tbody>
                 </table>
               </div>
-              <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex flex-col items-end border-t border-slate-100">
+              <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex flex-col items-end border-t border-slate-100 dark:border-slate-800">
                 <div className="flex justify-between w-full md:w-80 pt-2">
                   <span className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">Total Payroll</span>
-                  <span className="text-2xl font-black text-maroon-800 leading-none">PKR {totalAmount.toLocaleString()}</span>
+                  <span className="text-2xl font-black text-maroon-800 dark:text-rose-400 leading-none">PKR {totalAmount.toLocaleString()}</span>
                 </div>
               </div>
             </>

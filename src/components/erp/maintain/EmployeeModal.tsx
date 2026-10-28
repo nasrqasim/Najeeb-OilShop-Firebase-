@@ -19,6 +19,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, onSave }: Emp
     department: "Sales",
     designation: "",
     contact: "",
+    phone: "",
     email: "",
     address: "",
     isSalesman: false,
@@ -33,7 +34,8 @@ export default function EmployeeModal({ isOpen, onClose, employee, onSave }: Emp
         cnic: employee.cnic || "",
         department: employee.department || "Sales",
         designation: employee.designation || "",
-        contact: employee.contact || "",
+        contact: employee.contact || employee.phone || "",
+        phone: employee.contact || employee.phone || "",
         email: employee.email || "",
         address: employee.address || "",
         isSalesman: employee.isSalesman || false,
@@ -47,6 +49,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, onSave }: Emp
         department: "Sales",
         designation: "",
         contact: "",
+        phone: "",
         email: "",
         address: "",
         isSalesman: false,
@@ -57,7 +60,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, onSave }: Emp
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (onSave) onSave(formData);
+    if (onSave) onSave({ ...formData, phone: formData.contact });
     onClose();
   };
 
