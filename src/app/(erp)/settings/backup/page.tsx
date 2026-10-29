@@ -10,9 +10,16 @@ import {
   AlertCircle,
   Loader2,
   CheckCircle2,
-  Info
+  Info,
+  HardDrive,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Cpu,
+  Layers
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { getLocalVaultStats, exportLocalVaultAsJson, processSyncQueue } from "@/lib/realtimeBackup";
 
 export default function BackupExportPage() {
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -20,6 +27,49 @@ export default function BackupExportPage() {
   const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const [stats, setStats] = useState<any[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+
+  const [localVaultStats, setLocalVaultStats] = useState({ totalVault: 0, pendingSync: 0, lastSyncTime: "-" });
+  const [isSyncingOffline, setIsSyncingOffline] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+
+  const refreshVaultStats = async () => {
+    const s = await getLocalVaultStats();
+    setLocalVaultStats(s);
+  };
+
+  useEffect(() => {
+    refreshVaultStats();
+    if (typeof window !== "undefined") {
+      setIsOnline(navigator.onLine);
+
+      const handleOnline = () => {
+        setIsOnline(true);
+        processSyncQueue().then(() => refreshVaultStats());
+      };
+      const handleOffline = () => setIsOnline(false);
+
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+
+      return () => {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+      };
+    }
+  }, []);
+
+  const handleManualSync = async () => {
+    setIsSyncingOffline(true);
+    try {
+      const res = await processSyncQueue();
+      await refreshVaultStats();
+      setStatus({ type: "success", message: `Offline Sync completed: ${res.processed} synchronized, ${res.failed} failed.` });
+    } catch (e: any) {
+      setStatus({ type: "error", message: e.message || "Failed to process offline sync queue." });
+    } finally {
+      setIsSyncingOffline(false);
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -181,6 +231,91 @@ export default function BackupExportPage() {
           <p className="font-bold">{status.message}</p>
         </div>
       )}
+
+      {/* Real-Time Local Vault & Offline Sync Engine Section */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-[2.5rem] p-8 lg:p-10 shadow-xl border border-slate-700/50 space-y-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-4 bg-maroon-800/40 border border-maroon-700/50 text-rose-300 rounded-3xl">
+              <Cpu size={32} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-2xl font-black tracking-tight">Real-Time Per-Entry Local Backup & Offline Mode</h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Active Engine
+                </span>
+              </div>
+              <p className="text-slate-300 text-xs font-medium mt-1">
+                Zero data loss guarantee: every invoice, receipt, and payment is instantly committed to local device storage before & during cloud sync.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end md:self-auto">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${isOnline ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300 animate-pulse'}`}>
+              {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+              <span>{isOnline ? "Device Online" : "Device Offline (Local Vault Safe)"}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Metrics */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-5 space-y-1">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Local Vault Cached Records</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-white">{localVaultStats.totalVault}</span>
+              <span className="text-xs text-slate-400">entries saved locally</span>
+            </div>
+          </div>
+          <div className="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-5 space-y-1">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Pending Offline Queue</span>
+            <div className="flex items-baseline gap-2">
+              <span className={`text-2xl font-black ${localVaultStats.pendingSync > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                {localVaultStats.pendingSync}
+              </span>
+              <span className="text-xs text-slate-400">waiting to sync to cloud</span>
+            </div>
+          </div>
+          <div className="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-5 space-y-1">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Last Local Device Backup</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-xl font-bold text-slate-200">{localVaultStats.lastSyncTime}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Controls & Research Notes */}
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <button
+            onClick={exportLocalVaultAsJson}
+            className="flex-1 py-3 px-5 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+          >
+            <HardDrive size={16} /> Download Local Device Vault (.json)
+          </button>
+          <button
+            onClick={handleManualSync}
+            disabled={isSyncingOffline || !isOnline}
+            className="flex-1 py-3 px-5 bg-maroon-800 hover:bg-maroon-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer shadow-md"
+          >
+            <RefreshCw size={16} className={isSyncingOffline ? "animate-spin" : ""} /> 
+            {isSyncingOffline ? "Syncing Offline Queue..." : "Sync Pending Queue to Cloud Now"}
+          </button>
+        </div>
+
+        <div className="p-4 bg-slate-950/40 border border-slate-800 rounded-xl text-xs space-y-2 text-slate-300">
+          <span className="font-black text-amber-300 uppercase tracking-wider block">Multi-Device Architecture Protocol (Admin, Super Admin & Salesman):</span>
+          <p className="leading-relaxed">
+            <strong>1. Instant Local Journaling:</strong> Whenever an invoice or voucher is saved on any computer (Admin, Super Admin, or Salesman), the record is immediately committed to the client machine&apos;s local persistent storage (IndexedDB + LocalStorage).
+          </p>
+          <p className="leading-relaxed">
+            <strong>2. Offline Resilience:</strong> If the shop loses internet connectivity, the ERP seamlessly switches to local offline queue mode. Salesmen can continue creating invoices without interruption.
+          </p>
+          <p className="leading-relaxed">
+            <strong>3. Dual Cloud Sync:</strong> As soon as connectivity is restored, the queue worker automatically replays all offline transactions to Firestore and confirms their cloud status without any duplicate entry risk.
+          </p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Backup Card */}

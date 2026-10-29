@@ -35,6 +35,10 @@ export default function CustomerBalancesReportPage() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [selectedCustomerFilter, setSelectedCustomerFilter] = useState<string>("All");
+  const [selectedRegion, setSelectedRegion] = useState<string>("All");
+  const [selectedArea, setSelectedArea] = useState<string>("All");
+  const [minBalance, setMinBalance] = useState<string>("");
+  const [balanceTypeFilter, setBalanceTypeFilter] = useState<string>("All");
   const [categories, setCategories] = useState<string[]>([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
@@ -76,18 +80,17 @@ export default function CustomerBalancesReportPage() {
     fetchShop();
   }, []);
 
-  useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const [partiesRes, invoicesRes, cashReceiptsRes, bankReceiptsRes, cashPaymentsRes, bankPaymentsRes] = await Promise.all([
-          fetch('/api/parties?type=customer'),
-          fetch('/api/invoices'),
-          fetch('/api/cash-receipts'),
-          fetch('/api/bank-receipts'),
-          fetch('/api/cash-payments'),
-          fetch('/api/bank-payments')
-        ]);
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [partiesRes, invoicesRes, cashReceiptsRes, bankReceiptsRes, cashPaymentsRes, bankPaymentsRes] = await Promise.all([
+        fetch('/api/parties?type=customer', { cache: 'no-store' }),
+        fetch('/api/invoices', { cache: 'no-store' }),
+        fetch('/api/cash-receipts', { cache: 'no-store' }),
+        fetch('/api/bank-receipts', { cache: 'no-store' }),
+        fetch('/api/cash-payments', { cache: 'no-store' }),
+        fetch('/api/bank-payments', { cache: 'no-store' })
+      ]);
 
         const [partiesJson, invoicesJson, cashReceiptsJson, bankReceiptsJson, cashPaymentsJson, bankPaymentsJson] = await Promise.all([
           partiesRes.json(),
@@ -116,9 +119,11 @@ export default function CustomerBalancesReportPage() {
       } finally {
         setIsLoading(false);
       }
-    }
-    fetchData();
-  }, []);
+    };
+
+    useEffect(() => {
+      fetchData();
+    }, []);
 
   useEffect(() => {
     if (rawParties.length === 0) return;
@@ -235,6 +240,9 @@ export default function CustomerBalancesReportPage() {
     setData(result);
   }, [rawParties, invoices, cashReceipts, bankReceipts, cashPayments, bankPayments, fromDate, toDate]);
 
+  const regions = Array.from(new Set(rawParties.map((p: any) => p.region || p.city).filter(Boolean))).sort() as string[];
+  const areas = Array.from(new Set(rawParties.map((p: any) => p.area || p.address).filter(Boolean))).sort() as string[];
+
   useEffect(() => {
     const q = searchQuery.trim().toLowerCase();
     let result = data;
@@ -257,15 +265,44 @@ export default function CustomerBalancesReportPage() {
       result = result.filter(r => r.id === selectedCustomerFilter || r.rawParty?._id === selectedCustomerFilter);
     }
 
+    if (selectedRegion !== "All") {
+      result = result.filter(r => 
+        (r.region || "").toLowerCase() === selectedRegion.toLowerCase() || 
+        (r.city || "").toLowerCase() === selectedRegion.toLowerCase() ||
+        (r.rawParty?.city || "").toLowerCase() === selectedRegion.toLowerCase()
+      );
+    }
+
+    if (selectedArea !== "All") {
+      result = result.filter(r => 
+        (r.area || "").toLowerCase() === selectedArea.toLowerCase() || 
+        String(r.rawParty?.address || "").toLowerCase().includes(selectedArea.toLowerCase())
+      );
+    }
+
+    if (minBalance !== "" && !isNaN(Number(minBalance))) {
+      const minVal = Number(minBalance);
+      result = result.filter(r => Math.abs(r.closing) >= minVal);
+    }
+
+    if (balanceTypeFilter === "receivable") {
+      result = result.filter(r => r.closing > 0);
+    } else if (balanceTypeFilter === "payable") {
+      result = result.filter(r => r.closing < 0);
+    } else if (balanceTypeFilter === "zero") {
+      result = result.filter(r => r.closing === 0);
+    }
+
     if (q) {
       result = result.filter((r) =>
         String(r.customer || "").toLowerCase().includes(q) ||
         String(r.region || "").toLowerCase().includes(q) ||
-        String(r.area || "").toLowerCase().includes(q)
+        String(r.area || "").toLowerCase().includes(q) ||
+        String(r.city || "").toLowerCase().includes(q)
       );
     }
     setFilteredData(result);
-  }, [searchQuery, selectedCategory, selectedCustomerFilter, data]);
+  }, [searchQuery, selectedCategory, selectedCustomerFilter, selectedRegion, selectedArea, minBalance, balanceTypeFilter, data]);
 
   const totalDebit = filteredData.reduce((s, r) => s + r.debit, 0);
   const totalCredit = filteredData.reduce((s, r) => s + r.credit, 0);
@@ -314,19 +351,39 @@ export default function CustomerBalancesReportPage() {
         </div>
         <div className="space-y-1 lg:col-span-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Region</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Regions</option>
+          <select 
+            value={selectedRegion} 
+            onChange={(e) => setSelectedRegion(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Regions ({regions.length})</option>
+            {regions.map((reg) => (
+              <option key={reg} value={reg}>{reg}</option>
+            ))}
           </select>
         </div>
         <div className="space-y-1 lg:col-span-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Area</label>
-          <select className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20">
-            <option>All Areas</option>
+          <select 
+            value={selectedArea} 
+            onChange={(e) => setSelectedArea(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="All">All Areas ({areas.length})</option>
+            {areas.map((ar) => (
+              <option key={ar} value={ar}>{ar}</option>
+            ))}
           </select>
         </div>
         <div className="space-y-1 lg:col-span-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Min Balance</label>
-          <input type="number" placeholder="0" className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" />
+          <input 
+            type="number" 
+            placeholder="Min Rs..." 
+            value={minBalance}
+            onChange={(e) => setMinBalance(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+          />
         </div>
         <div className="space-y-1 lg:col-span-3 xl:col-span-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">&nbsp;</label>
@@ -338,14 +395,18 @@ export default function CustomerBalancesReportPage() {
       </div>
       
       <div className="flex gap-2 shrink-0">
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-center gap-1.5">
+        <button onClick={() => exportToExcel(filteredData, "CustomerBalances.csv")} className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-center gap-1.5">
           <Download size={14} /> CSV
         </button>
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-center gap-1.5">
+        <button onClick={printPage} className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-center gap-1.5">
           <Printer size={14} /> Print
         </button>
-        <button className="px-3 py-2 bg-maroon-800 text-white rounded-lg text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20">
-          <Play size={14} /> Generate
+        <button 
+          onClick={fetchData} 
+          disabled={isLoading}
+          className="px-3.5 py-2 bg-maroon-800 text-white rounded-lg text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20 disabled:opacity-50 cursor-pointer"
+        >
+          <Play size={14} className={isLoading ? "animate-spin" : ""} /> {isLoading ? "Fetching..." : "Generate"}
         </button>
       </div>
     </div>

@@ -1,9 +1,9 @@
 "use client";
 import { getStartOfMonthStr, getCurrentDateStr } from "@/lib/dateUtils";
 import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
-import { Download, Printer, Play, Package, Hash, DollarSign, TrendingUp, Box, FileSpreadsheet, RotateCcw, Search } from "lucide-react";
+import { Download, Printer, Play, Package, Hash, DollarSign, TrendingUp, Box, FileSpreadsheet, RotateCcw, Search, RefreshCw } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 export default function ItemSaleAnalysisReportPage() {
@@ -20,45 +20,13 @@ export default function ItemSaleAnalysisReportPage() {
   const [taxFilter, setTaxFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
-  useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const [salesRes, itemsRes] = await Promise.all([
-          fetch('/api/sales'),
-          fetch('/api/items')
-        ]);
-        const [salesJson, itemsJson] = await Promise.all([
-          salesRes.json(),
-          itemsRes.json()
-        ]);
-
-        const itemsList = itemsJson.ok && Array.isArray(itemsJson.data) ? itemsJson.data : [];
-        setCatalogItems(itemsList);
-
-        const cats = Array.from(new Set(itemsList.map((i: any) => i.category).filter(Boolean))) as string[];
-        setCategories(cats);
-
-        if (salesJson.ok && Array.isArray(salesJson.data)) {
-          setRawSales(salesJson.data);
-          processItemSales(salesJson.data, itemsList, {
-            dateFrom: getStartOfMonthStr(),
-            dateTo: getCurrentDateStr(),
-            selectedCategory: "All",
-            taxFilter: "All",
-            searchQuery: ""
-          });
-        }
-      } catch (error) {
-        console.error("Error fetching item analysis:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
-
-  function processItemSales(sales: any[], itemsList: any[], filters: any) {
+  const processItemSales = useCallback((sales: any[], itemsList: any[], catMap: Record<string, string>, filters: {
+    dateFrom: string;
+    dateTo: string;
+    selectedCategory: string;
+    taxFilter: string;
+    searchQuery: string;
+  }) => {
     const itemMapById: Record<string, any> = {};
     const itemMapByName: Record<string, any> = {};
     itemsList.forEach((it: any) => {
@@ -68,7 +36,7 @@ export default function ItemSaleAnalysisReportPage() {
       if (it.code) itemMapByName[it.code.trim().toLowerCase()] = it;
     });
 
-    let filteredSales = sales.filter((s: any) => {
+    const filteredSales = sales.filter((s: any) => {
       if (s.date) {
         const d = s.date.substring(0, 10);
         if (filters.dateFrom && d < filters.dateFrom) return false;
@@ -97,10 +65,13 @@ export default function ItemSaleAnalysisReportPage() {
 
         const code = catalogMatch?.code || line.itemCode || line.code || (rawItemIdStr ? `ITM-${rawItemIdStr.slice(-4)}` : "GEN-01");
         const name = catalogMatch?.name || desc || line.itemName || "General Item";
-        const category = catalogMatch?.category || line.category || "General";
+        
+        // Resolve human-readable category name
+        const rawCategory = catalogMatch?.category || catalogMatch?.mainCategoryId || line.category;
+        const category = catMap[String(rawCategory)] || catMap[String(rawCategory).toLowerCase()] || rawCategory || "General";
         const unit = catalogMatch?.unit || line.unit || "Unit";
 
-        if (filters.selectedCategory !== "All" && category !== filters.selectedCategory) {
+        if (filters.selectedCategory !== "All" && category.toLowerCase() !== filters.selectedCategory.toLowerCase()) {
           return;
         }
 
@@ -157,10 +128,109 @@ export default function ItemSaleAnalysisReportPage() {
     }));
 
     setData(finalized);
-  }
+  }, []);
+
+  const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
+
+  const fetchData = async (overrideFilters?: any) => {
+    setIsLoading(true);
+    try {
+      const [salesRes, itemsRes, catsRes] = await Promise.all([
+        fetch('/api/sales', { cache: 'no-store' }),
+        fetch('/api/items', { cache: 'no-store' }),
+        fetch('/api/categories', { cache: 'no-store' }).catch(() => null)
+      ]);
+      const salesJson = await salesRes.json();
+      const itemsJson = await itemsRes.json();
+      let catsJson: any = { ok: false, data: [] };
+      if (catsRes) {
+        try { catsJson = await catsRes.json(); } catch (_) {}
+      }
+
+      const itemsList = itemsJson.ok && Array.isArray(itemsJson.data) ? itemsJson.data : [];
+      setCatalogItems(itemsList);
+
+      const catMap: Record<string, string> = {};
+      const catNamesSet = new Set<string>();
+
+      if (catsJson.ok && Array.isArray(catsJson.data)) {
+        catsJson.data.forEach((c: any) => {
+          if (c._id && c.name) catMap[String(c._id)] = c.name;
+          if (c.id && c.name) catMap[String(c.id)] = c.name;
+          if (c.name) catNamesSet.add(c.name);
+        });
+      }
+
+      itemsList.forEach((it: any) => {
+        const cat = catMap[it.category] || catMap[it.mainCategoryId] || it.category || it.mainCategory;
+        if (cat && typeof cat === 'string') {
+          catNamesSet.add(cat);
+        }
+      });
+
+      const uniqueCats = Array.from(catNamesSet).filter(Boolean).sort();
+      setCategories(uniqueCats);
+      setCategoryMap(catMap);
+
+      const salesList = salesJson.ok && Array.isArray(salesJson.data) ? salesJson.data : [];
+      setRawSales(salesList);
+
+      const activeFilters = {
+        dateFrom: overrideFilters?.dateFrom ?? dateFrom,
+        dateTo: overrideFilters?.dateTo ?? dateTo,
+        selectedCategory: overrideFilters?.selectedCategory ?? selectedCategory,
+        taxFilter: overrideFilters?.taxFilter ?? taxFilter,
+        searchQuery: overrideFilters?.searchQuery ?? searchQuery
+      };
+
+      processItemSales(salesList, itemsList, catMap, activeFilters);
+    } catch (error) {
+      console.error("Error fetching item analysis:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleCategoryChange = (newCat: string) => {
+    setSelectedCategory(newCat);
+    processItemSales(rawSales, catalogItems, categoryMap, {
+      dateFrom,
+      dateTo,
+      selectedCategory: newCat,
+      taxFilter,
+      searchQuery
+    });
+  };
+
+  const handleTaxFilterChange = (newTax: string) => {
+    setTaxFilter(newTax);
+    processItemSales(rawSales, catalogItems, categoryMap, {
+      dateFrom,
+      dateTo,
+      selectedCategory,
+      taxFilter: newTax,
+      searchQuery
+    });
+  };
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    processItemSales(rawSales, catalogItems, categoryMap, {
+      dateFrom,
+      dateTo,
+      selectedCategory,
+      taxFilter,
+      searchQuery: query
+    });
+  };
 
   const handleGenerate = () => {
-    processItemSales(rawSales, catalogItems, {
+    // Re-fetch fresh live data from server and apply active filters
+    fetchData({
       dateFrom,
       dateTo,
       selectedCategory,
@@ -177,7 +247,7 @@ export default function ItemSaleAnalysisReportPage() {
     setSelectedCategory("All");
     setTaxFilter("All");
     setSearchQuery("");
-    processItemSales(rawSales, catalogItems, {
+    fetchData({
       dateFrom: defaultFrom,
       dateTo: defaultTo,
       selectedCategory: "All",
@@ -204,7 +274,16 @@ export default function ItemSaleAnalysisReportPage() {
           <input 
             type="date" 
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(e) => {
+              setDateFrom(e.target.value);
+              processItemSales(rawSales, catalogItems, categoryMap, {
+                dateFrom: e.target.value,
+                dateTo,
+                selectedCategory,
+                taxFilter,
+                searchQuery
+              });
+            }}
             className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
           />
         </div>
@@ -213,7 +292,16 @@ export default function ItemSaleAnalysisReportPage() {
           <input 
             type="date" 
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(e) => {
+              setDateTo(e.target.value);
+              processItemSales(rawSales, catalogItems, categoryMap, {
+                dateFrom,
+                dateTo: e.target.value,
+                selectedCategory,
+                taxFilter,
+                searchQuery
+              });
+            }}
             className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
           />
         </div>
@@ -221,10 +309,10 @@ export default function ItemSaleAnalysisReportPage() {
           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Category</label>
           <select 
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+            onChange={(e) => handleCategoryChange(e.target.value)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20 font-bold text-slate-700 dark:text-slate-200"
           >
-            <option value="All">All Categories</option>
+            <option value="All">All Categories ({categories.length})</option>
             {categories.map((cat: string) => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
@@ -234,7 +322,7 @@ export default function ItemSaleAnalysisReportPage() {
           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tax Filter</label>
           <select 
             value={taxFilter}
-            onChange={(e) => setTaxFilter(e.target.value)}
+            onChange={(e) => handleTaxFilterChange(e.target.value)}
             className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
           >
             <option value="All">Both (Tax + Non-Tax)</option>
@@ -250,7 +338,7 @@ export default function ItemSaleAnalysisReportPage() {
               type="text" 
               placeholder="Search by code, product name, or category..." 
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
             />
           </div>
@@ -260,9 +348,10 @@ export default function ItemSaleAnalysisReportPage() {
       <div className="flex justify-end gap-2 shrink-0">
         <button 
           onClick={handleGenerate}
-          className="px-3 py-1.5 bg-maroon-800 text-white rounded-lg text-xs font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
+          disabled={isLoading}
+          className="px-3.5 py-1.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20 disabled:opacity-50 transition-all cursor-pointer"
         >
-          <Play size={14} /> Generate Report
+          <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} /> {isLoading ? "Fetching..." : "Generate Report"}
         </button>
         <button 
           onClick={handleReset}

@@ -85,7 +85,6 @@ export const erpModules: ERPNavItem[] = [
       { title: "Purchase Return", href: "/purchases/purchase-return", roles: ["admin", "dataentry"] },
       { title: "Non-Tax Purchase Invoice", href: "/purchases/non-tax-purchase-invoice", roles: ["admin", "dataentry"] },
       { title: "Non-Tax Purchase Return", href: "/purchases/non-tax-purchase-return", roles: ["admin", "dataentry"] },
-      { title: "Import Purchase Invoice", href: "/purchases/import-purchase-invoice", roles: ["admin", "dataentry"] },
     ]
   },
   { 
