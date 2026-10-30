@@ -82,13 +82,18 @@ export default function ItemModal({ isOpen, onClose, item, onSave }: ItemModalPr
     e.preventDefault();
     
     // Validate conversion values
-    const validation = validateItemPackSizes(formData.gallonsInCtn, formData.litersInCtn);
+    const validation = validateItemPackSizes(formData.gallonsInCtn, formData.litersInCtn, formData.unit);
     if (!validation.ok) {
       alert(validation.message);
       return;
     }
     
-    if (onSave) onSave(formData);
+    const payload = {
+      ...formData,
+      piecesInCtn: formData.unit === "Piece" ? formData.litersInCtn : (item?.piecesInCtn || formData.litersInCtn),
+      kgInCtn: formData.unit === "KG" ? formData.litersInCtn : (item?.kgInCtn || formData.litersInCtn),
+    };
+    if (onSave) onSave(payload);
     onClose();
   };
 
@@ -182,7 +187,9 @@ export default function ItemModal({ isOpen, onClose, item, onSave }: ItemModalPr
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">Liters in Ctn</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              {formData.unit === "Piece" ? "Pieces in Ctn" : formData.unit === "KG" ? "KG in Ctn" : "Liters in Ctn"}
+            </label>
             <input
               type="number"
               step="any"

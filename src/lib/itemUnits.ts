@@ -41,10 +41,21 @@ export function getPackSizes(item?: PackItem): PackSizes {
 
 export function validateItemPackSizes(
   gallonsInCtn: unknown,
-  litersInCtn: unknown
+  litersInCtn: unknown,
+  unit?: string
 ): { ok: true } | { ok: false; message: string } {
+  const u = String(unit || "").toLowerCase();
+  const isNonLiquid = u === "piece" || u === "pcs" || u === "kg" || u === "carton";
+
   const g = Number(gallonsInCtn);
   const l = Number(litersInCtn);
+
+  if (isNonLiquid) {
+    if (g < 0 || l < 0) {
+      return { ok: false, message: "Conversion values cannot be negative." };
+    }
+    return { ok: true };
+  }
 
   if (gallonsInCtn === "" || litersInCtn === "" || gallonsInCtn == null || litersInCtn == null) {
     return { ok: false, message: "Gallons and litres per carton are required." };

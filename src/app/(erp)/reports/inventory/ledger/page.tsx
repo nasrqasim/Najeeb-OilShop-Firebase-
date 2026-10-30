@@ -2,11 +2,14 @@
 
 import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
 import SearchableItemSelect from "@/components/erp/ui/SearchableItemSelect";
-import { Download, Printer, Play, Clock, Box, ArrowUpRight, ArrowDownRight, FileSpreadsheet, Eye } from "lucide-react";
+import { Download, Printer, Play, Clock, Box, ArrowUpRight, ArrowDownRight, FileSpreadsheet, Eye, RefreshCw, X } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
 import { useState, useEffect, useMemo } from "react";
 import { lineStockQty } from "@/lib/itemUnits";
+import { loadInvoiceById } from "@/lib/loadInvoice";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+
+type DisplayUnit = "cartons" | "gallons" | "litres" | "kg" | "pieces";
 
 export default function InventoryLedgerReportPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -27,49 +30,108 @@ export default function InventoryLedgerReportPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
-  const [displayUnit, setDisplayUnit] = useState<"cartons" | "gallons" | "litres">("cartons");
+  const [displayUnit, setDisplayUnit] = useState<DisplayUnit>("cartons");
 
-  const selectedItemObj = items.find(i => i._id === selectedItemId);
-  const unitMultiplier = displayUnit === "gallons" ? (selectedItemObj?.gallonsInCtn || 4) : displayUnit === "litres" ? (selectedItemObj?.litersInCtn || 16) : 1;
-  const unitLabel = displayUnit === "gallons" ? "Gallons" : displayUnit === "litres" ? "Litres" : "Cartons";
-  const unitShort = displayUnit === "gallons" ? "Gal" : displayUnit === "litres" ? "Ltr" : "CTN";
+  const selectedItemObj = items.find(i => String(i._id) === String(selectedItemId) || String(i.id) === String(selectedItemId));
 
-  const handleInvoiceClick = (refNo: string) => {
-    const inv = invoices.find(i => i.invoiceNo === refNo);
+  // Determine multiplier and labels according to selected display unit
+  const getUnitDetails = () => {
+    if (displayUnit === "gallons") {
+      return {
+        multiplier: Number(selectedItemObj?.gallonsInCtn) || 4,
+        label: "Gallons",
+        short: "Gal"
+      };
+    }
+    if (displayUnit === "litres") {
+      return {
+        multiplier: Number(selectedItemObj?.litersInCtn) || 16,
+        label: "Litres",
+        short: "Ltr"
+      };
+    }
+    if (displayUnit === "kg") {
+      return {
+        multiplier: Number(selectedItemObj?.kgInCtn) || Number(selectedItemObj?.litersInCtn) || 1,
+        label: "Kilograms",
+        short: "KG"
+      };
+    }
+    if (displayUnit === "pieces") {
+      return {
+        multiplier: Number(selectedItemObj?.piecesInCtn) || Number(selectedItemObj?.litersInCtn) || Number(selectedItemObj?.gallonsInCtn) || 1,
+        label: "Pieces",
+        short: "Pcs"
+      };
+    }
+    return {
+      multiplier: 1,
+      label: "Cartons",
+      short: "CTN"
+    };
+  };
+
+  const { multiplier: unitMultiplier, label: unitLabel, short: unitShort } = getUnitDetails();
+
+  const handleInvoiceClick = async (refNo: string) => {
+    let inv = invoices.find(i => i.invoiceNo === refNo || i.docNo === refNo);
     if (inv) {
+      if (inv._id || inv.id) {
+        try {
+          const full = await loadInvoiceById(inv._id || inv.id);
+          if (full) inv = full;
+        } catch (_) {}
+      }
       setSelectedInvoice(inv);
     } else {
+      try {
+        const res = await fetch(`/api/invoices`);
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.data)) {
+          const found = json.data.find((i: any) => i.invoiceNo === refNo || i.docNo === refNo);
+          if (found) {
+            setSelectedInvoice(found);
+            return;
+          }
+        }
+      } catch (_) {}
       alert(`Invoice ${refNo} not found`);
     }
   };
 
+  const fetchBaseData = async () => {
+    try {
+      const [itemsRes, catsRes, invRes] = await Promise.all([
+        fetch('/api/items', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ok: false, data: [] })),
+        fetch('/api/categories', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ok: false, data: [] })),
+        fetch('/api/invoices', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ok: false, data: [] })),
+      ]);
+
+      if (itemsRes.ok && Array.isArray(itemsRes.data)) setItems(itemsRes.data);
+      if (catsRes.ok && Array.isArray(catsRes.data)) setCategories(catsRes.data.filter((c: any) => c.type === "main"));
+      if (invRes.ok && Array.isArray(invRes.data)) setInvoices(invRes.data);
+    } catch (e) {
+      console.error("Error fetching base data for inventory ledger:", e);
+    }
+  };
+
   useEffect(() => {
-    fetch('/api/items')
-      .then(r => r.json())
-      .then(json => { if (json.ok) setItems(json.data); })
-      .catch(console.error);
-
-    fetch('/api/categories')
-      .then(r => r.json())
-      .then(json => { if (json.ok) setCategories(json.data.filter((c: any) => c.type === "main")); })
-      .catch(console.error);
-
-    fetch('/api/invoices')
-      .then(r => r.json())
-      .then(json => { if (json.ok) setInvoices(json.data); })
-      .catch(console.error);
+    fetchBaseData();
   }, []);
 
-  const handleGenerate = async (itemIdOverride?: string) => {
+  const handleGenerate = async (itemIdOverride?: string, fromOverride?: string, toOverride?: string) => {
     const id = itemIdOverride || selectedItemId;
     if (!id) return alert("Please select an item");
+    const activeFrom = fromOverride !== undefined ? fromOverride : fromDate;
+    const activeTo = toOverride !== undefined ? toOverride : toDate;
+
     setIsLoading(true);
     setHasSearched(true);
     try {
       const params = new URLSearchParams({ itemId: id });
-      if (fromDate) params.set("from", fromDate);
-      if (toDate) params.set("to", toDate);
-      const res = await fetch(`/api/reports/inventory-ledger?${params}`);
+      if (activeFrom) params.set("from", activeFrom);
+      if (activeTo) params.set("to", activeTo);
+      const res = await fetch(`/api/reports/inventory-ledger?${params}`, { cache: "no-store" });
       const json = await res.json();
       if (json.ok) {
         const payload = json.data;
@@ -86,10 +148,10 @@ export default function InventoryLedgerReportPage() {
             closingBalance: payload.closingBalance ?? 0,
           });
         } else {
-          const totalIn = rows.reduce((s: number, r: any) => s + (r.in || 0), 0);
+          const totalIn = rows.filter((r: any) => r.refNo !== "Opening").reduce((s: number, r: any) => s + (r.in || 0), 0);
           const totalOut = rows.reduce((s: number, r: any) => s + (r.out || 0), 0);
           const closingBalance = rows.length > 0 ? rows[rows.length - 1].balance : 0;
-          const openingBalance = rows.length > 0 ? rows[0].balance - rows[0].in + rows[0].out : 0;
+          const openingBalance = rows.length > 0 ? rows[0].balance : 0;
           setSummary({ openingBalance, totalIn, totalOut, closingBalance });
         }
       } else {
@@ -146,8 +208,8 @@ export default function InventoryLedgerReportPage() {
         if (!isIn && !isOut) return;
         
         (inv.lines || []).forEach((line: any) => {
-          const lineItemId = line.itemId?._id || line.itemId;
-          if (String(lineItemId) !== String(item._id)) return;
+          const lineItemId = line.itemId?._id || line.itemId?.id || line.itemId;
+          if (String(lineItemId) !== String(item._id || item.id)) return;
           
           let qty = Number(line.cartons) || 0;
           if (qty <= 0) {
@@ -170,7 +232,6 @@ export default function InventoryLedgerReportPage() {
         });
       });
       
-      // Original inception opening stock
       const inceptionOpening = Number(item.openingStockCartons ?? item.openingStock ?? item.stockQtyCartons ?? 0);
       const opening = Math.max(0, inceptionOpening + qtyInPrior - qtyOutPrior);
       const closing = Math.max(0, opening + qtyInPeriod - qtyOutPeriod);
@@ -200,10 +261,10 @@ export default function InventoryLedgerReportPage() {
   }, [itemsWithOpening]);
 
   const stats = [
-    { title: `Opening Balance (${unitShort})`, value: (summary.openingBalance * unitMultiplier).toLocaleString(), icon: Box, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
-    { title: `Total In (${unitShort})`, value: (summary.totalIn * unitMultiplier).toLocaleString(), icon: ArrowUpRight, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
-    { title: `Total Out (${unitShort})`, value: (summary.totalOut * unitMultiplier).toLocaleString(), icon: ArrowDownRight, iconColor: "text-rose-600", iconBg: "bg-rose-50" },
-    { title: `Closing Balance (${unitShort})`, value: (summary.closingBalance * unitMultiplier).toLocaleString(), icon: Box, iconColor: "text-blue-600", iconBg: "bg-blue-50", valueColor: "text-blue-600" },
+    { title: `Opening Balance (${unitShort})`, value: (summary.openingBalance * unitMultiplier).toFixed(2), icon: Box, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
+    { title: `Total In (${unitShort})`, value: (summary.totalIn * unitMultiplier).toFixed(2), icon: ArrowUpRight, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
+    { title: `Total Out (${unitShort})`, value: (summary.totalOut * unitMultiplier).toFixed(2), icon: ArrowDownRight, iconColor: "text-rose-600", iconBg: "bg-rose-50" },
+    { title: `Closing Balance (${unitShort})`, value: (summary.closingBalance * unitMultiplier).toFixed(2), icon: Box, iconColor: "text-blue-600", iconBg: "bg-blue-50", valueColor: "text-blue-600" },
   ];
 
   const Filters = (
@@ -219,7 +280,7 @@ export default function InventoryLedgerReportPage() {
             onChange={(val) => {
               setSelectedItemId(val);
               if (val) {
-                handleGenerate(val);
+                handleGenerate(val, fromDate, toDate);
               } else {
                 setHasSearched(false);
                 setData([]);
@@ -230,22 +291,46 @@ export default function InventoryLedgerReportPage() {
         </div>
         <div className="space-y-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">From Date</label>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" />
+          <input 
+            type="date" 
+            value={fromDate} 
+            onChange={(e) => {
+              const val = e.target.value;
+              setFromDate(val);
+              if (selectedItemId) {
+                handleGenerate(selectedItemId, val, toDate);
+              }
+            }} 
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+          />
         </div>
         <div className="space-y-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">To Date</label>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" />
+          <input 
+            type="date" 
+            value={toDate} 
+            onChange={(e) => {
+              const val = e.target.value;
+              setToDate(val);
+              if (selectedItemId) {
+                handleGenerate(selectedItemId, fromDate, val);
+              }
+            }} 
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" 
+          />
         </div>
         <div className="space-y-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Display Unit</label>
           <select
             value={displayUnit}
-            onChange={(e) => setDisplayUnit(e.target.value as any)}
-            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+            onChange={(e) => setDisplayUnit(e.target.value as DisplayUnit)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-maroon-800/20 cursor-pointer"
           >
             <option value="cartons">Cartons (CTN)</option>
             <option value="gallons">Gallons</option>
             <option value="litres">Litres</option>
+            <option value="kg">Kilograms (KG)</option>
+            <option value="pieces">Pieces (PCS)</option>
           </select>
         </div>
       </div>
@@ -258,22 +343,42 @@ export default function InventoryLedgerReportPage() {
               setHasSearched(false);
               setData([]);
             }}
-            className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+            className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
           >
             Show Whole Stock
           </button>
         )}
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 flex items-center justify-center gap-1.5">
+        <button 
+          onClick={() => {
+            const exportData = selectedItemId ? data.map(row => ({
+              Date: row.date ? new Date(row.date).toLocaleDateString('en-GB') : "-",
+              RefNo: row.refNo,
+              Party: row.partyName,
+              QtyIn: (row.in * unitMultiplier).toFixed(2),
+              QtyOut: (row.out * unitMultiplier).toFixed(2),
+              Unit: unitShort,
+              Rate: row.rate,
+              Total: row.total,
+              Balance: (row.balance * unitMultiplier).toFixed(2),
+            })) : filteredItems;
+            exportToExcel(exportData, `InventoryLedger_${unitLabel}.csv`);
+          }}
+          className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 flex items-center justify-center gap-1.5 cursor-pointer"
+        >
           <Download size={14} /> Export CSV
         </button>
-        <button className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 flex items-center justify-center gap-1.5">
+        <button 
+          onClick={printPage}
+          className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 flex items-center justify-center gap-1.5 cursor-pointer"
+        >
           <Printer size={14} /> Print
         </button>
         <button 
-          className="px-3 py-2 bg-maroon-800 text-white rounded-lg text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20"
-          onClick={() => handleGenerate()}
+          className="px-3.5 py-2 bg-maroon-800 text-white rounded-lg text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1.5 shadow-sm shadow-maroon-900/20 cursor-pointer disabled:opacity-50"
+          onClick={() => handleGenerate(selectedItemId, fromDate, toDate)}
+          disabled={isLoading}
         >
-          <Play size={14} /> Generate Report
+          <Play size={14} className={isLoading ? "animate-spin" : ""} /> {isLoading ? "Fetching..." : "Generate Report"}
         </button>
       </div>
     </div>
@@ -281,7 +386,7 @@ export default function InventoryLedgerReportPage() {
 
   const trendData = data.map(t => ({
     name: new Date(t.date).toLocaleDateString('default', { day: '2-digit', month: 'short' }),
-    balance: t.balance * unitMultiplier
+    balance: Number((t.balance * unitMultiplier).toFixed(2))
   }));
 
   return (
@@ -295,9 +400,9 @@ export default function InventoryLedgerReportPage() {
         { label: "Export Excel", onClick: () => {
           const exportData = selectedItemId ? data.map(row => ({
             ...row,
-            in: row.in * unitMultiplier,
-            out: row.out * unitMultiplier,
-            balance: row.balance * unitMultiplier,
+            in: (row.in * unitMultiplier).toFixed(2),
+            out: (row.out * unitMultiplier).toFixed(2),
+            balance: (row.balance * unitMultiplier).toFixed(2),
             unit: unitLabel,
           })) : filteredItems;
           exportToExcel(exportData, `InventoryLedger_${unitLabel}.xlsx`);
@@ -349,7 +454,7 @@ export default function InventoryLedgerReportPage() {
             <p className="text-sm font-bold">Generating inventory ledger...</p>
           </div>
         ) : selectedItemId ? (
-          // DETAILED ITEM LEDGER VIEW (Switcher Techno Style)
+          // DETAILED ITEM LEDGER VIEW
           data.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-slate-400 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-800/50 mx-4">
               <Box size={48} className="mb-4 opacity-30" />
@@ -367,7 +472,7 @@ export default function InventoryLedgerReportPage() {
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Party Name</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Qty In ({unitShort})</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Qty Out ({unitShort})</th>
-                        <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Unit</th>
+                        <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Unit</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Rate</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Gross Amount</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Discount</th>
@@ -378,21 +483,23 @@ export default function InventoryLedgerReportPage() {
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center w-28">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {data.map((row, i) => {
                         const qty = row.in > 0 ? row.in : row.out;
                         const grossAmt = qty * row.rate;
                         const isOpening = row.refNo === "Opening";
                         return (
                           <tr key={i} className={isOpening ? "bg-emerald-50 dark:bg-emerald-950/30 border-b-2 border-emerald-200 dark:border-emerald-800" : "hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"}>
-                            <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{new Date(row.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}</td>
+                            <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                              {row.date ? new Date(row.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-') : "-"}
+                            </td>
                             <td className={`px-4 py-3 text-[11px] font-bold ${isOpening ? "text-emerald-700 dark:text-emerald-400" : "text-blue-600"}`}>
                               {isOpening ? (
                                 <span className="flex items-center gap-1">📦 {row.refNo}</span>
                               ) : (
                                 <button 
                                   onClick={() => handleInvoiceClick(row.refNo)}
-                                  className="hover:underline flex items-center gap-1 text-left"
+                                  className="hover:underline flex items-center gap-1 text-left cursor-pointer"
                                 >
                                   {row.refNo}
                                 </button>
@@ -404,21 +511,27 @@ export default function InventoryLedgerReportPage() {
                             >
                               {row.partyName || "Walk-in (Cash) Customer"}
                             </td>
-                            <td className="px-4 py-3 text-[11px] font-black text-emerald-600 text-right">{row.in > 0 ? (row.in * unitMultiplier).toFixed(2) : ""}</td>
-                            <td className="px-4 py-3 text-[11px] font-black text-rose-600 text-right">{row.out > 0 ? (row.out * unitMultiplier).toFixed(2) : ""}</td>
-                            <td className="px-4 py-3 text-[11px] font-medium text-slate-400">{unitShort}</td>
+                            <td className="px-4 py-3 text-[11px] font-black text-emerald-600 text-right">
+                              {row.in > 0 ? (row.in * unitMultiplier).toFixed(2) : ""}
+                            </td>
+                            <td className="px-4 py-3 text-[11px] font-black text-rose-600 text-right">
+                              {row.out > 0 ? (row.out * unitMultiplier).toFixed(2) : ""}
+                            </td>
+                            <td className="px-4 py-3 text-[11px] font-medium text-center text-slate-500">{unitShort}</td>
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-500 text-right">{row.rate.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-[11px] font-medium text-slate-600 text-right">{grossAmt.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300 text-right">{grossAmt.toFixed(2)}</td>
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-400 text-right">0.00</td>
-                            <td className="px-4 py-3 text-[11px] font-medium text-slate-600 text-right">{grossAmt.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300 text-right">{grossAmt.toFixed(2)}</td>
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-400 text-right">0.00</td>
-                            <td className="px-4 py-3 text-[11px] font-bold text-slate-700 text-right">{row.total.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-sm font-black text-slate-800 dark:text-slate-100 text-right">{(row.balance * unitMultiplier).toFixed(2)}</td>
+                            <td className="px-4 py-3 text-[11px] font-bold text-slate-700 dark:text-slate-200 text-right">{row.total.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-sm font-black text-slate-800 dark:text-slate-100 text-right">
+                              {(row.balance * unitMultiplier).toFixed(2)}
+                            </td>
                             <td className="px-4 py-3 text-center">
                               {!isOpening && (
                                 <button
                                   onClick={() => handleInvoiceClick(row.refNo)}
-                                  className="px-2 py-1 bg-maroon-800 text-white rounded text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1 mx-auto"
+                                  className="px-2.5 py-1 bg-maroon-800 text-white rounded text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1 mx-auto cursor-pointer shadow-sm transition-all"
                                 >
                                   <Eye size={10} /> View Invoice
                                 </button>
@@ -427,7 +540,7 @@ export default function InventoryLedgerReportPage() {
                           </tr>
                         );
                       })}
-                      {/* Footer Row (Styled like Switcher Techno) */}
+                      {/* Footer Row */}
                       <tr className="bg-slate-100 dark:bg-slate-800 border-t-2 border-slate-300 dark:border-slate-700 font-black">
                         <td colSpan={3} className="px-4 py-3 text-[10px] uppercase tracking-widest text-slate-500"></td>
                         <td className="px-2 py-2 text-right">
@@ -448,6 +561,7 @@ export default function InventoryLedgerReportPage() {
                             {(summary.closingBalance * unitMultiplier).toFixed(2)}
                           </span>
                         </td>
+                        <td></td>
                       </tr>
                     </tbody>
                   </table>
@@ -487,9 +601,9 @@ export default function InventoryLedgerReportPage() {
                     <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center w-24">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {itemsWithOpening.map((item, i) => (
-                    <tr key={item._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <tr key={item._id || item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-4 py-3 text-[11px] font-medium text-slate-400 dark:text-slate-500">{i + 1}</td>
                       <td className="px-4 py-3 text-[11px] font-bold text-slate-700 dark:text-slate-200">{item.code}</td>
                       <td className="px-4 py-3 text-[11px] font-bold text-slate-900 dark:text-white uppercase">{item.name}</td>
@@ -501,15 +615,15 @@ export default function InventoryLedgerReportPage() {
                       <td className="px-4 py-3 text-[11px] font-medium text-slate-500 text-right">{(item.reorderLevel || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <button
-                          onClick={() => handleViewLedger(item._id)}
-                          className="px-2 py-1 bg-maroon-800 text-white rounded text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1 mx-auto"
+                          onClick={() => handleViewLedger(item._id || item.id)}
+                          className="px-2 py-1 bg-maroon-800 text-white rounded text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1 mx-auto cursor-pointer"
                         >
                           <Eye size={10} /> View Ledger
                         </button>
                       </td>
                     </tr>
                   ))}
-                  {/* Totals Row for Whole Stock List */}
+                  {/* Totals Row */}
                   <tr className="bg-slate-100 dark:bg-slate-800 border-t-2 border-slate-300 dark:border-slate-700 font-black">
                     <td colSpan={3} className="px-4 py-3 text-xs font-black text-slate-700 dark:text-slate-300 text-right">Totals:</td>
                     <td className="px-4 py-3 text-[11px] font-bold text-slate-800 dark:text-slate-100 text-right">
@@ -537,7 +651,7 @@ export default function InventoryLedgerReportPage() {
           </div>
         )}
 
-        {/* Premium Invoice Details Modal */}
+        {/* Invoice Details Modal */}
         {selectedInvoice && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm no-print">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] w-full max-w-4xl max-h-[85vh] overflow-y-auto shadow-2xl flex flex-col relative">
@@ -547,10 +661,10 @@ export default function InventoryLedgerReportPage() {
                 <div>
                   <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Transaction Invoice</span>
                   <h3 className="text-xl font-black text-slate-900 dark:text-white mt-1 flex items-center gap-2">
-                    {selectedInvoice.invoiceNo}
+                    {selectedInvoice.invoiceNo || selectedInvoice.docNo}
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                      selectedInvoice.status?.toLowerCase() === "paid" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/50" : 
-                      selectedInvoice.status?.toLowerCase() === "posted" ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200/50" : 
+                      String(selectedInvoice.status || "").toLowerCase() === "paid" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/50" : 
+                      String(selectedInvoice.status || "").toLowerCase() === "posted" ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200/50" : 
                       "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400 border border-orange-200/50"
                     }`}>
                       {selectedInvoice.status || "Posted"}
@@ -559,9 +673,9 @@ export default function InventoryLedgerReportPage() {
                 </div>
                 <button 
                   onClick={() => setSelectedInvoice(null)}
-                  className="w-10 h-10 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-bold text-slate-500 dark:text-slate-400 text-sm"
+                  className="w-10 h-10 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-bold text-slate-500 dark:text-slate-400 text-sm cursor-pointer"
                 >
-                  ✕
+                  <X size={18} />
                 </button>
               </div>
 
@@ -572,7 +686,7 @@ export default function InventoryLedgerReportPage() {
                   <div className="space-y-1">
                     <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Party Name</p>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">
-                      {selectedInvoice.partyId?.companyName || selectedInvoice.partyId?.name || selectedInvoice.customer || "Walk-in (Cash) Customer"}
+                      {selectedInvoice.partyId?.companyName || selectedInvoice.partyId?.name || selectedInvoice.partyName || selectedInvoice.vendorName || selectedInvoice.customerName || selectedInvoice.customer || "Walk-in (Cash) Customer"}
                     </p>
                   </div>
                   <div className="space-y-1">
@@ -588,7 +702,7 @@ export default function InventoryLedgerReportPage() {
                   <div className="space-y-1">
                     <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Warehouse Location</p>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">
-                      {selectedInvoice.locationId?.name || "Main Warehouse"}
+                      {selectedInvoice.locationId?.name || selectedInvoice.location || "Main Warehouse"}
                     </p>
                   </div>
                 </div>
@@ -609,14 +723,26 @@ export default function InventoryLedgerReportPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {(selectedInvoice.lines || []).map((line: any, idx: number) => {
+                          const rawId = typeof line.itemId === "object" && line.itemId !== null 
+                            ? (line.itemId._id || line.itemId.id || "") 
+                            : String(line.itemId || "");
+
+                          const matchedItem = items.find(it => 
+                            String(it._id || it.id) === String(rawId) || 
+                            String(it.code).toLowerCase() === String(rawId).toLowerCase()
+                          );
+
+                          const itemName = line.description || line.itemName || line.name || line.item || line.itemTitle || line.itemId?.name || matchedItem?.name || selectedItemObj?.name || "Item Details";
+                          const itemCode = line.itemCode || line.code || line.itemId?.code || matchedItem?.code || (line.itemId?.name ? "" : selectedItemObj?.code) || "";
+
                           const lineQty = lineStockQty(line);
                           const gross = lineQty * (Number(line.rate) || 0);
                           const net = Number(line.netAmount) || gross;
                           return (
                             <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 text-xs transition-colors">
                               <td className="px-4 py-3">
-                                <p className="font-bold text-slate-950 dark:text-white uppercase">{line.itemId?.name || "Unknown Item"}</p>
-                                {line.itemId?.code && <span className="text-[9px] font-bold text-slate-400 mt-0.5 inline-block">Code: {line.itemId.code}</span>}
+                                <p className="font-bold text-slate-950 dark:text-white uppercase">{itemName}</p>
+                                {itemCode && <span className="text-[9px] font-bold text-slate-400 mt-0.5 inline-block">Code: {itemCode}</span>}
                               </td>
                               <td className="px-4 py-3 text-right font-black text-slate-800 dark:text-slate-200">
                                 {lineQty.toFixed(2)}
@@ -659,7 +785,7 @@ export default function InventoryLedgerReportPage() {
               <div className="px-8 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2 sticky bottom-0 bg-white dark:bg-slate-900">
                 <button 
                   onClick={() => setSelectedInvoice(null)}
-                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
                 >
                   Close
                 </button>
