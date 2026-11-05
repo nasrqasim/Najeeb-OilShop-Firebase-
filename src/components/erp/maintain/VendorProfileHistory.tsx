@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { 
   ArrowLeft, FileText, Printer, MessageCircle, Calendar, Wallet, Search, Play, 
   ShoppingBag, CreditCard, ChevronRight, TrendingUp, BarChart2, CalendarDays, Award, X,
-  RefreshCw
+  RefreshCw, Camera
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import ERPStatCard from "@/components/erp/ui/ERPStatCard";
@@ -37,6 +37,8 @@ export default function VendorProfileHistory({
   // WhatsApp Share Modal
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [waDocData, setWaDocData] = useState<any>(null);
+  const [waType, setWaType] = useState<"Statement" | "Reminder" | "Invoice">("Statement");
+  const [waMode, setWaMode] = useState<"image" | "text">("image");
 
   // Purchase Details Modal
   const [viewPurchase, setViewPurchase] = useState<any>(null);
@@ -425,50 +427,100 @@ export default function VendorProfileHistory({
         </button>
         <div className="flex gap-2">
           {purchases && purchases.length > 0 && (
-            <button 
-              onClick={() => {
-                const latestPur = purchases[0];
-                setWaDocData({
-                  ...latestPur,
-                  lines: latestPur.lines || latestPur.items,
-                  rows: latestPur.lines || latestPur.items,
-                  vendorName: vendor.name,
-                  vendorAddress: vendor.address,
-                  location: vendor.address,
-                  phone: vendor.phone
-                });
-                setIsWhatsAppModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black shadow-xl shadow-emerald-600/20 transition-all"
-              title="Share Latest Purchase Bill on WhatsApp"
-            >
-              <MessageCircle size={18} />
-              WhatsApp Bill
-            </button>
+            <div className="flex items-center rounded-xl overflow-hidden shadow-lg shadow-emerald-600/20">
+              <button 
+                onClick={() => {
+                  const latestPur = purchases[0];
+                  setWaDocData({
+                    ...latestPur,
+                    lines: latestPur.lines || latestPur.items,
+                    rows: latestPur.lines || latestPur.items,
+                    vendorName: vendor.name,
+                    vendorAddress: vendor.address,
+                    location: vendor.address,
+                    phone: vendor.phone
+                  });
+                  setWaType("Invoice");
+                  setWaMode("image");
+                  setIsWhatsAppModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all border-r border-emerald-500/40"
+                title="Send Purchase Bill Picture on WhatsApp"
+              >
+                <Camera size={15} />
+                WhatsApp Bill
+              </button>
+              <button 
+                onClick={() => {
+                  const latestPur = purchases[0];
+                  setWaDocData({
+                    ...latestPur,
+                    lines: latestPur.lines || latestPur.items,
+                    rows: latestPur.lines || latestPur.items,
+                    vendorName: vendor.name,
+                    vendorAddress: vendor.address,
+                    location: vendor.address,
+                    phone: vendor.phone
+                  });
+                  setWaType("Invoice");
+                  setWaMode("text");
+                  setIsWhatsAppModalOpen(true);
+                }}
+                className="flex items-center gap-1 px-3 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black transition-all"
+                title="Send Purchase Bill as Text on WhatsApp"
+              >
+                <MessageCircle size={14} />
+                Text
+              </button>
+            </div>
           )}
           {vendor.phone && vendor.phone.replace(/[^0-9]/g, "").length >= 10 && (
-            <button 
-              onClick={() => {
-                setWaDocData({
-                  opening: ledgerData.opening,
-                  rows: ledgerData.rows,
-                  totalDr: ledgerData.totalDr,
-                  totalCr: ledgerData.totalCr,
-                  closing: ledgerData.closing
-                });
-                setIsWhatsAppModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-6 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-sm font-black shadow-xl shadow-[#25D366]/20 transition-all"
-            >
-              <MessageCircle size={18} />
-              WhatsApp Statement
-            </button>
+            <div className="flex items-center rounded-xl overflow-hidden shadow-lg shadow-[#25D366]/20">
+              <button 
+                onClick={() => {
+                  setWaDocData({
+                    opening: ledgerData.opening,
+                    rows: ledgerData.rows,
+                    totalDr: ledgerData.totalDr,
+                    totalCr: ledgerData.totalCr,
+                    closing: ledgerData.closing
+                  });
+                  setWaType("Statement");
+                  setWaMode("image");
+                  setIsWhatsAppModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-black transition-all border-r border-emerald-600/40"
+                title="Send Statement as Picture on WhatsApp"
+              >
+                <Camera size={15} />
+                WhatsApp Statement
+              </button>
+              <button 
+                onClick={() => {
+                  setWaDocData({
+                    opening: ledgerData.opening,
+                    rows: ledgerData.rows,
+                    totalDr: ledgerData.totalDr,
+                    totalCr: ledgerData.totalCr,
+                    closing: ledgerData.closing
+                  });
+                  setWaType("Statement");
+                  setWaMode("text");
+                  setIsWhatsAppModalOpen(true);
+                }}
+                className="flex items-center gap-1 px-3 py-2.5 bg-[#1EBE5D] hover:bg-[#179B4A] text-white text-xs font-black transition-all"
+                title="Send Statement as Text on WhatsApp"
+              >
+                <MessageCircle size={14} />
+                Text
+              </button>
+            </div>
           )}
           <button 
             onClick={() => window.print()}
-            className="flex items-center gap-2 px-6 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-sm font-black shadow-xl shadow-maroon-900/20 transition-all"
+            className="flex items-center gap-2 px-6 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-black shadow-xl shadow-maroon-900/20 transition-all"
           >
-            <Printer size={18} />
+            <Printer size={16} />
             Print Ledger
           </button>
         </div>
@@ -1155,9 +1207,10 @@ export default function VendorProfileHistory({
         isOpen={isWhatsAppModalOpen}
         onClose={() => setIsWhatsAppModalOpen(false)}
         party={vendor}
-        type="Statement"
-        documentData={ledgerData}
+        type={waType}
+        documentData={waDocData || ledgerData}
         shopProfile={shopProfile}
+        initialMode={waMode}
       />
 
     </div>

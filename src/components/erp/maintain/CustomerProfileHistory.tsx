@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { 
   ArrowLeft, FileText, Printer, MessageCircle, Calendar, Wallet, Search, Play, 
   ShoppingBag, CreditCard, ChevronRight, TrendingUp, BarChart2, CalendarDays, Award,
-  RefreshCw, X
+  RefreshCw, X, Camera
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import ERPStatCard from "@/components/erp/ui/ERPStatCard";
@@ -44,6 +44,7 @@ export default function CustomerProfileHistory({
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [waDocData, setWaDocData] = useState<any>(null);
   const [waType, setWaType] = useState<"Statement" | "Reminder" | "Invoice">("Reminder");
+  const [waMode, setWaMode] = useState<"image" | "text">("image");
 
   // Invoice Details Modal
   const [viewInvoice, setViewInvoice] = useState<any>(null);
@@ -456,46 +457,88 @@ export default function CustomerProfileHistory({
         </button>
         <div className="flex gap-2">
           {sales && sales.length > 0 && (
-            <button 
-              onClick={() => {
-                const latestSale = sales[0];
-                setWaDocData({
-                  ...latestSale,
-                  lines: latestSale.lines || latestSale.items,
-                  rows: latestSale.lines || latestSale.items,
-                  customerName: currentCustomer.name,
-                  customerAddress: currentCustomer.address,
-                  location: currentCustomer.address,
-                  phone: currentCustomer.phone
-                });
-                setWaType("Invoice");
-                setIsWhatsAppModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black shadow-xl shadow-emerald-600/20 transition-all"
-              title="Share Latest Sale Bill on WhatsApp"
-            >
-              <MessageCircle size={18} />
-              WhatsApp Bill
-            </button>
+            <div className="flex items-center rounded-xl overflow-hidden shadow-lg shadow-emerald-600/20">
+              <button 
+                onClick={() => {
+                  const latestSale = sales[0];
+                  setWaDocData({
+                    ...latestSale,
+                    lines: latestSale.lines || latestSale.items,
+                    rows: latestSale.lines || latestSale.items,
+                    customerName: currentCustomer.name,
+                    customerAddress: currentCustomer.address,
+                    location: currentCustomer.address,
+                    phone: currentCustomer.phone
+                  });
+                  setWaType("Invoice");
+                  setWaMode("image");
+                  setIsWhatsAppModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all border-r border-emerald-500/40"
+                title="Send Bill as Picture on WhatsApp"
+              >
+                <Camera size={15} />
+                WhatsApp Bill
+              </button>
+              <button 
+                onClick={() => {
+                  const latestSale = sales[0];
+                  setWaDocData({
+                    ...latestSale,
+                    lines: latestSale.lines || latestSale.items,
+                    rows: latestSale.lines || latestSale.items,
+                    customerName: currentCustomer.name,
+                    customerAddress: currentCustomer.address,
+                    location: currentCustomer.address,
+                    phone: currentCustomer.phone
+                  });
+                  setWaType("Invoice");
+                  setWaMode("text");
+                  setIsWhatsAppModalOpen(true);
+                }}
+                className="flex items-center gap-1 px-3 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black transition-all"
+                title="Send Bill as Text Message on WhatsApp"
+              >
+                <MessageCircle size={14} />
+                Text
+              </button>
+            </div>
           )}
           {currentCustomer.phone && currentCustomer.phone.replace(/[^0-9]/g, "").length >= 10 && (
-            <button 
-              onClick={() => {
-                setWaDocData(ledgerData);
-                setWaType("Statement");
-                setIsWhatsAppModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-6 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-sm font-black shadow-xl shadow-[#25D366]/20 transition-all"
-            >
-              <MessageCircle size={18} />
-              WhatsApp Statement
-            </button>
+            <div className="flex items-center rounded-xl overflow-hidden shadow-lg shadow-[#25D366]/20">
+              <button 
+                onClick={() => {
+                  setWaDocData(ledgerData);
+                  setWaType("Statement");
+                  setWaMode("image");
+                  setIsWhatsAppModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-black transition-all border-r border-emerald-600/40"
+                title="Send Statement as Picture on WhatsApp"
+              >
+                <Camera size={15} />
+                WhatsApp Statement
+              </button>
+              <button 
+                onClick={() => {
+                  setWaDocData(ledgerData);
+                  setWaType("Statement");
+                  setWaMode("text");
+                  setIsWhatsAppModalOpen(true);
+                }}
+                className="flex items-center gap-1 px-3 py-2.5 bg-[#1EBE5D] hover:bg-[#179B4A] text-white text-xs font-black transition-all"
+                title="Send Statement as Text Message on WhatsApp"
+              >
+                <MessageCircle size={14} />
+                Text
+              </button>
+            </div>
           )}
           <button 
             onClick={() => window.print()}
-            className="flex items-center gap-2 px-6 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-sm font-black shadow-xl shadow-maroon-900/20 transition-all"
+            className="flex items-center gap-2 px-6 py-2.5 bg-maroon-800 hover:bg-maroon-900 text-white rounded-xl text-xs font-black shadow-xl shadow-maroon-900/20 transition-all"
           >
-            <Printer size={18} />
+            <Printer size={16} />
             Print Ledger
           </button>
         </div>
@@ -1356,6 +1399,7 @@ export default function CustomerProfileHistory({
         type={waType}
         documentData={waDocData}
         shopProfile={shopProfile}
+        initialMode={waMode}
       />
 
     </div>
