@@ -46,6 +46,7 @@ export default function BankPaymentPage() {
   }, [showForm]);
 
   const deletePayment = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete? (Yes / No)")) return;
     try {
       await fetch(`/api/bank-payments/${id}`, { method: "DELETE" });
       fetchPayments();

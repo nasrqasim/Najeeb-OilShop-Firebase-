@@ -46,6 +46,7 @@ export default function BankReceiptPage() {
   }, [showForm]);
 
   const deleteReceipt = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete? (Yes / No)")) return;
     try {
       await fetch(`/api/bank-receipts/${id}`, { method: "DELETE" });
       fetchReceipts();

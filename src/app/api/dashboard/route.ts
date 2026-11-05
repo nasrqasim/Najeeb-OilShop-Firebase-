@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     const dateParam = searchParams.get("date");
     const targetDateStr = dateParam ? dateParam.slice(0, 10) : new Date().toISOString().slice(0, 10);
 
-    const [allParties, allInvoices, allCR, allCP, allBR, allBP, allItems, allOtherIncomes] = await Promise.all([
+    const [allParties, allInvoices, allCR, allCP, allBR, allBP, allItems, allOtherIncomes, allAdvances, allLoans] = await Promise.all([
       getAllParties(),
       getAllInvoices(),
       getAllCashReceipts(),
@@ -36,7 +36,9 @@ export async function GET(req: Request) {
       getAllBankReceipts(),
       getAllBankPayments(),
       getAllItems(),
-      getDocuments("other_incomes")
+      getDocuments("other_incomes"),
+      getDocuments("salary_advances"),
+      getDocuments("salary_loans")
     ]);
 
     const customers = allParties.filter((p: any) => p.type === "Customer");
@@ -154,6 +156,18 @@ export async function GET(req: Request) {
         if (!vendorIds.has(pid) && getDayStr(p.date || p.createdAt) === dStr && p.status !== "Cancelled") otherCashPayments += Number(p.amount) || 0;
       });
 
+      allAdvances.forEach((adv: any) => {
+        if (adv.status !== "Cancelled" && adv.status !== "cancelled" && adv.status !== "Rejected" && getDayStr(adv.date || adv.createdAt) === dStr) {
+          otherCashPayments += Number(adv.amount) || 0;
+        }
+      });
+
+      allLoans.forEach((loan: any) => {
+        if (loan.status !== "Cancelled" && loan.status !== "cancelled" && loan.status !== "Rejected" && getDayStr(loan.date || loan.createdAt) === dStr) {
+          otherCashPayments += Number(loan.amount) || 0;
+        }
+      });
+
       let otherIncomeToday = 0;
       allOtherIncomes.forEach((inc: any) => {
         if (getDayStr(inc.date || inc.createdAt) === dStr && inc.status !== "cancelled" && inc.status !== "Cancelled") {
@@ -261,6 +275,20 @@ export async function GET(req: Request) {
         if (customerIds.has(pid)) priorRecDebits += amt;
         if (vendorIds.has(pid)) priorPayDebits += amt;
         priorCbPayments += amt;
+      }
+    });
+
+    allAdvances.forEach((adv: any) => {
+      const dStr = getDayStr(adv.date || adv.createdAt);
+      if (dStr && dStr < targetDateStr && adv.status !== "Cancelled" && adv.status !== "cancelled" && adv.status !== "Rejected") {
+        priorCbPayments += Number(adv.amount) || 0;
+      }
+    });
+
+    allLoans.forEach((loan: any) => {
+      const dStr = getDayStr(loan.date || loan.createdAt);
+      if (dStr && dStr < targetDateStr && loan.status !== "Cancelled" && loan.status !== "cancelled" && loan.status !== "Rejected") {
+        priorCbPayments += Number(loan.amount) || 0;
       }
     });
 

@@ -399,7 +399,9 @@ export function calculateCashBankPosition(
   bankReceipts: any[],
   cashPayments: any[],
   bankPayments: any[],
-  otherIncomes: any[] = []
+  otherIncomes: any[] = [],
+  salaryAdvances: any[] = [],
+  salaryLoans: any[] = []
 ) {
   let receiptsFromSales = 0;
   allInvoices.forEach((i: any) => {
@@ -436,9 +438,11 @@ export function calculateCashBankPosition(
 
   const cpSum = cashPayments.filter(p => p.status !== "Cancelled").reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const bpSum = bankPayments.filter(p => p.status !== "Cancelled").reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const saSum = salaryAdvances.filter(a => a.status !== "Cancelled" && a.status !== "cancelled" && a.status !== "Rejected").reduce((s, a) => s + (Number(a.amount) || 0), 0);
+  const slSum = salaryLoans.filter(l => l.status !== "Cancelled" && l.status !== "cancelled" && l.status !== "Rejected").reduce((s, l) => s + (Number(l.amount) || 0), 0);
 
   const totalInflow = receiptsFromSales + crSum + brSum + incSum;
-  const totalOutflow = paymentsForPurchases + cpSum + bpSum;
+  const totalOutflow = paymentsForPurchases + cpSum + bpSum + saSum + slSum;
   const current = opening + totalInflow - totalOutflow;
 
   return {
@@ -451,6 +455,8 @@ export function calculateCashBankPosition(
     paymentsForPurchases,
     cashPayments: cpSum,
     bankPayments: bpSum,
+    salaryAdvances: saSum,
+    salaryLoans: slSum,
     totalOutflow,
     current
   };
@@ -507,7 +513,9 @@ export function calculateCashBankLedger(
   cashPayments: any[],
   bankPayments: any[],
   otherIncomes: any[] = [],
-  expenses: any[] = []
+  expenses: any[] = [],
+  salaryAdvances: any[] = [],
+  salaryLoans: any[] = []
 ): { txs: CashBankTransaction[], closing: number } {
   const txs: CashBankTransaction[] = [];
   
@@ -704,6 +712,46 @@ export function calculateCashBankLedger(
       credit: Number(e.amount) || 0,
       runningBalance: 0,
       source: "expenses"
+    });
+  });
+
+  // 8. Salary Advances (Deduct from Cash in Hand)
+  salaryAdvances.forEach(adv => {
+    if (adv.status === "Cancelled" || adv.status === "cancelled" || adv.status === "Rejected") return;
+    const amt = Number(adv.amount) || 0;
+    if (amt <= 0) return;
+    txs.push({
+      date: new Date(adv.date || adv.createdAt),
+      voucherNo: adv.voucherNo || `ADV-${adv._id || ""}`,
+      voucherType: "ADV",
+      module: "Salary Advances",
+      accountTitle: `Salary Advance - ${adv.employee || "Staff"}`,
+      accountCode: "1111",
+      remarks: `Salary Advance to ${adv.employee || "Staff"}${adv.deductionMonth ? ` (${adv.deductionMonth})` : ""}`,
+      debit: 0,
+      credit: amt,
+      runningBalance: 0,
+      source: "salary_advances"
+    });
+  });
+
+  // 9. Salary Loans (Deduct from Cash in Hand)
+  salaryLoans.forEach(loan => {
+    if (loan.status === "Cancelled" || loan.status === "cancelled" || loan.status === "Rejected") return;
+    const amt = Number(loan.amount) || 0;
+    if (amt <= 0) return;
+    txs.push({
+      date: new Date(loan.date || loan.createdAt),
+      voucherNo: loan.voucherNo || `LOAN-${loan._id || ""}`,
+      voucherType: "LOAN",
+      module: "Salary Loans",
+      accountTitle: `Salary Loan - ${loan.employee || "Staff"}`,
+      accountCode: "1111",
+      remarks: `Salary Loan to ${loan.employee || "Staff"}${loan.installments ? ` (${loan.installments} Installments)` : ""}`,
+      debit: 0,
+      credit: amt,
+      runningBalance: 0,
+      source: "salary_loans"
     });
   });
 

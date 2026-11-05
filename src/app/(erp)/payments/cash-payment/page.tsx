@@ -58,6 +58,7 @@ export default function CashPaymentPage() {
   }, [showForm]);
 
   const deletePayment = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete? (Yes / No)")) return;
     try {
       await fetch(`/api/cash-payments/${id}`, { method: "DELETE" });
       fetchPayments();

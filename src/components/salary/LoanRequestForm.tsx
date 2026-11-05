@@ -15,7 +15,7 @@ export default function LoanRequestForm({ onClose, initialData }: any) {
     amount: initialData?.amount || 0,
     installments: initialData?.installments || 12,
     monthlyDeduction: initialData?.monthlyDeduction || 0,
-    status: initialData?.status || "Pending",
+    status: initialData?.status || "Approved",
   });
   const [isSaving, setIsSaving] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);

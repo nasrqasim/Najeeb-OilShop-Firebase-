@@ -31,6 +31,7 @@ export default function FinalSettlementPage() {
   }, [showForm]);
 
   const deleteRecord = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete? (Yes / No)")) return;
     setRecords(records.filter(r => r._id !== id));
     try {
       await fetch(`/api/salary-settlements/${id}`, { method: "DELETE" });

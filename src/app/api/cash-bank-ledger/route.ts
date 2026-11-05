@@ -19,7 +19,9 @@ export async function GET(req: Request) {
       bankPayments,
       otherIncomes,
       expenses,
-      accounts
+      accounts,
+      salaryAdvances,
+      salaryLoans
     ] = await Promise.all([
       getAllInvoices(),
       getAllCashReceipts(),
@@ -28,7 +30,9 @@ export async function GET(req: Request) {
       getAllBankPayments(),
       Promise.all([getDocuments("other_incomes"), getDocuments("incomes")]).then(([oi, i]) => [...(oi || []), ...(i || [])]),
       getDocuments("expenses"),
-      getDocuments("accounts")
+      getDocuments("accounts"),
+      getDocuments("salary_advances"),
+      getDocuments("salary_loans")
     ]);
 
     // Calculate initial opening from cash & bank accounts
@@ -46,7 +50,9 @@ export async function GET(req: Request) {
       cashPayments,
       bankPayments,
       otherIncomes,
-      expenses
+      expenses,
+      salaryAdvances,
+      salaryLoans
     );
 
     return ok({ 

@@ -116,7 +116,7 @@ export default function CashBanksPage() {
         else if (itemModule === "Cash Receipts") cashReceipts += debit;
         else if (itemModule === "Bank Receipts") bankReceipts += debit;
         else if (itemModule === "Other Income") otherIncome += debit;
-        else if (itemModule === "Purchases" || itemModule === "Cash Payments" || itemModule === "Bank Payments") payments += credit;
+        else if (itemModule === "Purchases" || itemModule === "Cash Payments" || itemModule === "Bank Payments" || itemModule === "Salary Advances" || itemModule === "Salary Loans") payments += credit;
         else if (itemModule === "Expenses") expenses += credit;
         else if (itemModule === "Sales Return") payments += credit; // Refund
         else if (itemModule === "Purchase Return") cashReceipts += debit; // Refund recv

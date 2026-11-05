@@ -15,7 +15,7 @@ export default function AdvanceRequestForm({ onClose, initialData }: any) {
     department: initialData?.department || "",
     amount: initialData?.amount || 0,
     deductionMonth: initialData?.deductionMonth || "",
-    status: initialData?.status || "Pending",
+    status: initialData?.status || "Paid",
   });
   const [isSaving, setIsSaving] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);

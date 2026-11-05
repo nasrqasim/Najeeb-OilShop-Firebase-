@@ -61,6 +61,7 @@ export default function DeliveryChallanPage() {
   }, [showForm]);
 
   const deleteChallan = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete? (Yes / No)")) return;
     try {
       const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
       if (res.ok) {
