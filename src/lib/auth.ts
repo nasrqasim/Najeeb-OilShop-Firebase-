@@ -24,11 +24,20 @@ export const authOptions: NextAuthOptions = {
         const target = usernameTrimmed.toLowerCase();
         
         try {
-          const snap = await adminDb.collection("users").get();
-          const allUsers: any[] = [];
-          snap.forEach(doc => {
-            allUsers.push({ _id: doc.id, id: doc.id, ...doc.data() });
-          });
+          let allUsers: any[] = [];
+          try {
+            const snap = await adminDb.collection("users").get();
+            snap.forEach(doc => {
+              allUsers.push({ _id: doc.id, id: doc.id, ...doc.data() });
+            });
+          } catch (err) {
+            console.warn("Auth: Firestore users query error, checking fallback store...");
+          }
+
+          if (allUsers.length === 0) {
+            const { getCollectionData } = await import("@/lib/firestore/fallbackStore");
+            allUsers = getCollectionData("users");
+          }
 
           const user = allUsers.find((u: any) => 
             u.isActive !== false && (

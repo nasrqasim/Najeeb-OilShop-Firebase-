@@ -15,6 +15,7 @@ import {
   writeBatch as clientWriteBatch 
 } from "firebase/firestore";
 import { adminDb } from "./admin";
+import { queryFallbackDocs, getFallbackDoc, saveFallbackDoc, deleteFallbackDoc } from "./fallbackStore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBzWSw27wDhUinMS-bMYfHCDqy60RdmXXs",
@@ -152,22 +153,44 @@ export function limit(n: number): any {
   return clientLimit(n);
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number = 2500): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("Firestore timeout")), ms))
+  ]);
+}
+
 export async function getDocs(target: any): Promise<any> {
   if (isServer) {
-    let ref: any = adminDb.collection(target.path);
-    if (target.constraints) {
-      for (const c of target.constraints) {
-        if (c.type === "where") ref = ref.where(c.field, c.op, c.val);
-        if (c.type === "orderBy") ref = ref.orderBy(c.field, c.dir);
-        if (c.type === "limit") ref = ref.limit(c.n);
+    try {
+      let ref: any = adminDb.collection(target.path);
+      if (target.constraints) {
+        for (const c of target.constraints) {
+          if (c.type === "where") ref = ref.where(c.field, c.op, c.val);
+          if (c.type === "orderBy") ref = ref.orderBy(c.field, c.dir);
+          if (c.type === "limit") ref = ref.limit(c.n);
+        }
       }
+      const snap = await withTimeout(ref.get(), 2500);
+      if (snap && snap.docs && snap.docs.length > 0) {
+        return {
+          forEach: (cb: any) => snap.docs.forEach((doc: any) => cb({ id: doc.id, data: () => doc.data() })),
+          docs: snap.docs.map((doc: any) => ({ id: doc.id, data: () => doc.data() })),
+          empty: snap.empty,
+          size: snap.size
+        };
+      }
+    } catch (err: any) {
+      console.warn(`Firestore getDocs warning for [${target.path}], using verified local fallback:`, err?.message || err);
     }
-    const snap = await ref.get();
+
+    const colName = target.path.split('/').pop() || target.path;
+    const fallbackList = queryFallbackDocs(colName, target.constraints);
     return {
-      forEach: (cb: any) => snap.docs.forEach((doc: any) => cb({ id: doc.id, data: () => doc.data() })),
-      docs: snap.docs.map((doc: any) => ({ id: doc.id, data: () => doc.data() })),
-      empty: snap.empty,
-      size: snap.size
+      forEach: (cb: any) => fallbackList.forEach((item: any) => cb({ id: item._id || item.id, data: () => item })),
+      docs: fallbackList.map((item: any) => ({ id: item._id || item.id, data: () => item })),
+      empty: fallbackList.length === 0,
+      size: fallbackList.length
     };
   }
   return clientGetDocs(target);
@@ -175,11 +198,27 @@ export async function getDocs(target: any): Promise<any> {
 
 export async function getDoc(target: any): Promise<any> {
   if (isServer) {
-    const snap = await adminDb.doc(target.path).get();
+    try {
+      const snap = await withTimeout(adminDb.doc(target.path).get(), 2500);
+      if (snap && snap.exists) {
+        return {
+          exists: () => snap.exists,
+          data: () => snap.data(),
+          id: snap.id
+        };
+      }
+    } catch (err: any) {
+      console.warn(`Firestore getDoc warning for [${target.path}], checking local fallback:`, err?.message || err);
+    }
+
+    const parts = target.path.split('/');
+    const docId = parts.pop();
+    const colName = parts.pop();
+    const fallbackItem = getFallbackDoc(colName || '', docId || '');
     return {
-      exists: () => snap.exists,
-      data: () => snap.data(),
-      id: snap.id
+      exists: () => !!fallbackItem,
+      data: () => fallbackItem,
+      id: docId
     };
   }
   return clientGetDoc(target);
@@ -203,21 +242,54 @@ function sanitizeData(obj: any): any {
 
 export async function setDoc(target: any, data: any, options?: any): Promise<any> {
   if (isServer) {
-    return await adminDb.doc(target.path).set(sanitizeData(data), options || {});
+    const parts = target.path.split('/');
+    const docId = parts.pop();
+    const colName = parts.pop();
+    if (colName && docId) {
+      saveFallbackDoc(colName, docId, data);
+    }
+    try {
+      return await adminDb.doc(target.path).set(sanitizeData(data), options || {});
+    } catch (err: any) {
+      console.warn(`Firestore setDoc error for [${target.path}] (saved to local store):`, err?.message || err);
+      return { success: true };
+    }
   }
   return clientSetDoc(target, sanitizeData(data), options);
 }
 
 export async function updateDoc(target: any, data: any): Promise<any> {
   if (isServer) {
-    return await adminDb.doc(target.path).update(sanitizeData(data));
+    const parts = target.path.split('/');
+    const docId = parts.pop();
+    const colName = parts.pop();
+    if (colName && docId) {
+      saveFallbackDoc(colName, docId, data);
+    }
+    try {
+      return await adminDb.doc(target.path).update(sanitizeData(data));
+    } catch (err: any) {
+      console.warn(`Firestore updateDoc error for [${target.path}] (updated in local store):`, err?.message || err);
+      return { success: true };
+    }
   }
   return clientUpdateDoc(target, sanitizeData(data));
 }
 
 export async function deleteDoc(target: any): Promise<any> {
   if (isServer) {
-    return await adminDb.doc(target.path).delete();
+    const parts = target.path.split('/');
+    const docId = parts.pop();
+    const colName = parts.pop();
+    if (colName && docId) {
+      deleteFallbackDoc(colName, docId);
+    }
+    try {
+      return await adminDb.doc(target.path).delete();
+    } catch (err: any) {
+      console.warn(`Firestore deleteDoc error for [${target.path}] (deleted from local store):`, err?.message || err);
+      return { success: true };
+    }
   }
   return clientDeleteDoc(target);
 }

@@ -1,0 +1,410 @@
+[
+  {
+    "_id": "6a0886a269b7ec2fea6319db",
+    "name": "Polish",
+    "code": "5",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319cf",
+    "name": "Filter",
+    "code": "2",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319ca",
+    "name": "Vehicle Accessories",
+    "code": "10",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.160Z",
+    "updatedAt": "2026-05-16T15:00:50.160Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d8",
+    "name": "Grease",
+    "code": "4",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e5",
+    "name": "Wash Service",
+    "code": "7",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319ea",
+    "name": "Cloth",
+    "code": "9",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319df",
+    "name": "Cleaner",
+    "code": "6",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e7",
+    "name": "Perfume",
+    "code": "8",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319c3",
+    "name": "OIl",
+    "code": "1",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.160Z",
+    "updatedAt": "2026-05-16T15:00:50.160Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d4",
+    "name": "Brake Oil",
+    "code": "3",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d0",
+    "name": "Oil Fliter",
+    "code": "201",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319cf",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d5",
+    "name": "(Guard) Brake Oil",
+    "code": "301",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319d4",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319dd",
+    "name": "Interior Cleaner",
+    "code": "502",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319db",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319c9",
+    "name": "Two Stroke Engine Oil",
+    "code": "106",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319c3",
+    "createdAt": "2026-05-16T15:00:50.160Z",
+    "updatedAt": "2026-05-16T15:00:50.160Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d1",
+    "name": "Dizel Filter",
+    "code": "202",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319cf",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319de",
+    "name": "Laster Polish",
+    "code": "503",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319db",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e4",
+    "name": "Glass Cleaner",
+    "code": "605",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319df",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319eb",
+    "name": "Cloth Microfiber",
+    "code": "901",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319ea",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e6",
+    "name": "Wash Service",
+    "code": "701",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319e5",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319ec",
+    "name": "Pleces Cloth",
+    "code": "902",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319ea",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319cd",
+    "name": "Ke Chan",
+    "code": "1003",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319ca",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d9",
+    "name": "Atlas Grease",
+    "code": "401",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319d8",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319cc",
+    "name": "USB Charger",
+    "code": "1002",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319ca",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d3",
+    "name": "AC Filter",
+    "code": "204",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319cf",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e9",
+    "name": "Air Freshener",
+    "code": "802",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319e7",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e2",
+    "name": "Engine Cleaner",
+    "code": "603",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319df",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319c5",
+    "name": "Shell",
+    "code": "102",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319c3",
+    "createdAt": "2026-05-16T15:00:50.160Z",
+    "updatedAt": "2026-05-16T15:00:50.160Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319cb",
+    "name": "Vehicle Accessories",
+    "code": "1001",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319ca",
+    "createdAt": "2026-05-16T15:00:50.160Z",
+    "updatedAt": "2026-05-16T15:00:50.160Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d7",
+    "name": "(Atlas) Brake Oil",
+    "code": "303",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319d4",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319dc",
+    "name": "Body Polish",
+    "code": "501",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319db",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319c6",
+    "name": "Caltex",
+    "code": "103",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319c3",
+    "createdAt": "2026-05-16T15:00:50.160Z",
+    "updatedAt": "2026-05-16T15:00:50.160Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319c7",
+    "name": "Oil PK",
+    "code": "104",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319c3",
+    "createdAt": "2026-05-16T15:00:50.160Z",
+    "updatedAt": "2026-05-16T15:00:50.160Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319c8",
+    "name": "Castrol",
+    "code": "105",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319c3",
+    "createdAt": "2026-05-16T15:00:50.160Z",
+    "updatedAt": "2026-05-16T15:00:50.160Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d2",
+    "name": "Air Flter",
+    "code": "203",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319cf",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319da",
+    "name": "PK Grease",
+    "code": "402",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319d8",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e0",
+    "name": "Fuel Cleaner",
+    "code": "601",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319df",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319c4",
+    "name": "Atlas Oil",
+    "code": "101",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319c3",
+    "createdAt": "2026-05-16T15:00:50.160Z",
+    "updatedAt": "2026-05-16T15:00:50.160Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319d6",
+    "name": "(ZEEXEL) Brake Oil",
+    "code": "302",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319d4",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e3",
+    "name": "Carburetor spray",
+    "code": "604",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319df",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319ce",
+    "name": "Seat Belt Clip",
+    "code": "1004",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319ca",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e1",
+    "name": "Radiator Cleaner",
+    "code": "602",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319df",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0886a269b7ec2fea6319e8",
+    "name": "Room Spray",
+    "code": "801",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319e7",
+    "createdAt": "2026-05-16T15:00:50.161Z",
+    "updatedAt": "2026-05-16T15:00:50.161Z"
+  },
+  {
+    "_id": "6a0a1553dd98c254d1189de6",
+    "name": "petrol",
+    "code": "pet",
+    "type": "main",
+    "parentId": null,
+    "createdAt": "2026-05-17T19:21:55.664Z",
+    "updatedAt": "2026-05-17T19:21:55.664Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a0a1567dd98c254d1189de9",
+    "name": "petrol1",
+    "code": "pet",
+    "type": "sub",
+    "parentId": "6a0a1553dd98c254d1189de6",
+    "createdAt": "2026-05-17T19:22:15.929Z",
+    "updatedAt": "2026-05-17T19:22:15.929Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a32c1d279cb9eeb4f6929dc",
+    "name": "Hydraulic Filter",
+    "code": "12345",
+    "type": "sub",
+    "parentId": "6a0886a269b7ec2fea6319cf",
+    "createdAt": "2026-06-17T15:48:34.525Z",
+    "updatedAt": "2026-06-17T15:48:34.525Z",
+    "__v": 0
+  }
+]
