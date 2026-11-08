@@ -1,0 +1,13 @@
+[
+  {
+    "_id": "69f99e640492d76e3fbcd74d",
+    "valuationMethod": "Weighted Average",
+    "allowNegativeStock": false,
+    "autoAdjustShrinkage": true,
+    "enableBatchTracking": false,
+    "reorderAlerts": true,
+    "createdAt": "2026-05-05T07:38:12.052Z",
+    "updatedAt": "2026-05-05T07:38:12.052Z",
+    "__v": 0
+  }
+]

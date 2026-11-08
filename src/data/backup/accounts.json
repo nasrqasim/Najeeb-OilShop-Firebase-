@@ -1,0 +1,183 @@
+[
+  {
+    "_id": "69e6296336ed8e4ec55eb53a",
+    "name": "Cash in Hand",
+    "code": "1000",
+    "type": "Asset",
+    "balance": 446226.88768876944,
+    "__v": 0,
+    "createdAt": "2026-04-20T13:25:55.060Z",
+    "updatedAt": "2026-06-19T03:47:13.107Z",
+    "openingBalance": 0
+  },
+  {
+    "_id": "69e6296336ed8e4ec55eb53e",
+    "name": "Accounts Payable",
+    "code": "2000",
+    "type": "Liability",
+    "balance": 21118,
+    "__v": 0,
+    "createdAt": "2026-04-20T13:25:55.061Z",
+    "updatedAt": "2026-06-19T03:47:12.696Z",
+    "openingBalance": 0
+  },
+  {
+    "_id": "69e6296336ed8e4ec55eb541",
+    "name": "Cost of Goods Sold",
+    "code": "07863",
+    "type": "expense",
+    "balance": 30390.55555555556,
+    "__v": 0,
+    "createdAt": "2026-04-20T13:25:55.061Z",
+    "updatedAt": "2026-06-19T03:47:12.286Z",
+    "openingBalance": 0,
+    "title": "Service Dihadi Exptnses"
+  },
+  {
+    "_id": "69e6296336ed8e4ec55eb53b",
+    "name": "Bank Balance",
+    "code": "1010",
+    "type": "Asset",
+    "balance": 0,
+    "__v": 0,
+    "createdAt": "2026-04-20T13:25:55.061Z",
+    "updatedAt": "2026-06-19T03:47:11.876Z",
+    "openingBalance": 0
+  },
+  {
+    "_id": "69e6296336ed8e4ec55eb53d",
+    "name": "Accounts Receivable",
+    "code": "1300",
+    "type": "Asset",
+    "balance": 0,
+    "__v": 0,
+    "createdAt": "2026-04-20T13:25:55.061Z",
+    "updatedAt": "2026-06-19T03:47:11.467Z",
+    "openingBalance": 0
+  },
+  {
+    "_id": "69e6296336ed8e4ec55eb53c",
+    "name": "Inventory",
+    "code": "1200",
+    "type": "Asset",
+    "balance": 2833.4444444444416,
+    "__v": 0,
+    "createdAt": "2026-04-20T13:25:55.061Z",
+    "updatedAt": "2026-06-19T03:47:11.058Z",
+    "openingBalance": 0
+  },
+  {
+    "_id": "69e6296336ed8e4ec55eb53f",
+    "name": "Owner Equity",
+    "code": "3000",
+    "type": "Equity",
+    "balance": 0,
+    "__v": 0,
+    "createdAt": "2026-04-20T13:25:55.061Z",
+    "updatedAt": "2026-06-19T03:47:10.648Z",
+    "openingBalance": 0
+  },
+  {
+    "_id": "69e6296336ed8e4ec55eb540",
+    "name": "Sales Revenue",
+    "code": "4000",
+    "type": "Revenue",
+    "balance": 527691.8876887697,
+    "__v": 0,
+    "createdAt": "2026-04-20T13:25:55.061Z",
+    "updatedAt": "2026-06-19T03:47:10.238Z",
+    "openingBalance": 0
+  },
+  {
+    "_id": "69e6296336ed8e4ec55eb542",
+    "name": "Operating Expenses",
+    "code": "07862",
+    "type": "expense",
+    "balance": 71883,
+    "__v": 0,
+    "createdAt": "2026-04-20T13:25:55.061Z",
+    "updatedAt": "2026-06-19T03:47:09.828Z",
+    "openingBalance": 0,
+    "title": "Service Maintenance Expenses"
+  },
+  {
+    "_id": "69fd003cceb5d304562e5ac3",
+    "code": "07861",
+    "title": "Service Fule Expense",
+    "type": "expense",
+    "openingBalance": 2,
+    "createdAt": "2026-05-07T21:12:28.661Z",
+    "updatedAt": "2026-06-19T03:47:09.419Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a002142223df41a87258ae5",
+    "code": "00786",
+    "title": "Cash Hand",
+    "type": "cash",
+    "openingBalance": 1649257.68,
+    "createdAt": "2026-05-10T06:10:10.036Z",
+    "updatedAt": "2026-06-19T03:47:07.789Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a23cb6d6bde61537b0b747f",
+    "code": "07864",
+    "title": "Dokon Expense",
+    "type": "expense",
+    "openingBalance": 0,
+    "createdAt": "2026-06-06T07:25:33.973Z",
+    "updatedAt": "2026-06-06T07:29:23.601Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a23cba5eb0830805a657424",
+    "code": "07866",
+    "title": "Shkeel Expense",
+    "type": "expense",
+    "openingBalance": 0,
+    "createdAt": "2026-06-06T07:26:29.707Z",
+    "updatedAt": "2026-06-06T07:26:29.707Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a23cbe7eb0830805a657428",
+    "code": "07886",
+    "title": "Bilal Expense",
+    "type": "expense",
+    "openingBalance": 890900,
+    "createdAt": "2026-06-06T07:27:35.385Z",
+    "updatedAt": "2026-06-06T08:47:43.620Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a23cc1ceb0830805a65742b",
+    "code": "9865",
+    "title": "Dokan Maintenance Expense",
+    "type": "expense",
+    "openingBalance": 600,
+    "createdAt": "2026-06-06T07:28:28.535Z",
+    "updatedAt": "2026-06-06T08:19:23.970Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a24127e560b5896e3aa8a0c",
+    "code": "1220",
+    "title": "goods",
+    "type": "expense",
+    "openingBalance": 5000,
+    "createdAt": "2026-06-06T12:28:46.976Z",
+    "updatedAt": "2026-06-06T12:28:46.976Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a32df320bc4af913f2f58bc",
+    "code": "Tax on Purchased items",
+    "title": "tax on purchase items",
+    "type": "expense",
+    "openingBalance": 500,
+    "createdAt": "2026-06-17T17:53:54.313Z",
+    "updatedAt": "2026-06-17T17:55:15.220Z",
+    "__v": 0
+  }
+]

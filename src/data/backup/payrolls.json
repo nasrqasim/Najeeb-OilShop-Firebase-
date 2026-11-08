@@ -1,0 +1,25 @@
+[
+  {
+    "_id": "6a79ce947603de947202c82e",
+    "voucherNo": "PAY-1786367559143",
+    "month": "2026-08",
+    "date": "2026-08-10T00:00:00.000Z",
+    "workingDays": 30,
+    "staff": [
+      {
+        "employeeId": "6a79c5ccaef123f9b61811c9",
+        "basicSalary": 22000,
+        "allowances": 0,
+        "deductions": 0,
+        "advances": 0,
+        "loans": 0,
+        "netSalary": 22000
+      }
+    ],
+    "totalAmount": 22000,
+    "status": "posted",
+    "createdAt": "2026-08-10T13:13:56.748Z",
+    "updatedAt": "2026-08-10T13:13:56.748Z",
+    "__v": 0
+  }
+]

@@ -1,0 +1,28 @@
+[
+  {
+    "_id": "6a79cd177603de947202c801",
+    "voucherNo": "ADV-1786367037897",
+    "date": "2026-08-10",
+    "employee": "Zohaib OIl Changer",
+    "department": "OIl Changer",
+    "amount": 1000,
+    "deductionMonth": "2026-08",
+    "status": "Paid",
+    "createdAt": "2026-08-10T13:07:35.695Z",
+    "updatedAt": "2026-08-10T13:07:35.695Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a99ab4bdc06a0b9e97c2145",
+    "voucherNo": "ADV-1788455707344",
+    "date": "2026-09-03",
+    "employee": "Zohaib OIl Changer",
+    "department": "OIl Changer",
+    "amount": 800,
+    "deductionMonth": "2026-08",
+    "status": "Paid",
+    "createdAt": "2026-09-03T17:15:55.277Z",
+    "updatedAt": "2026-09-03T17:15:55.277Z",
+    "__v": 0
+  }
+]

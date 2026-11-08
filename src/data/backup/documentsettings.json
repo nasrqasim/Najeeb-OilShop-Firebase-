@@ -1,0 +1,57 @@
+[
+  {
+    "_id": "69f99e560492d76e3fbcd73f",
+    "type": "Quotation",
+    "prefix": "QT-",
+    "suffix": "",
+    "nextNo": 1,
+    "padding": 3,
+    "__v": 0,
+    "createdAt": "2026-05-05T07:37:58.241Z",
+    "updatedAt": "2026-05-05T07:37:58.241Z"
+  },
+  {
+    "_id": "69f99e560492d76e3fbcd73e",
+    "type": "Purchase Order",
+    "prefix": "PO-",
+    "suffix": "",
+    "nextNo": 1,
+    "padding": 4,
+    "__v": 0,
+    "createdAt": "2026-05-05T07:37:58.241Z",
+    "updatedAt": "2026-05-05T07:37:58.241Z"
+  },
+  {
+    "_id": "69f99e560492d76e3fbcd73d",
+    "type": "Sale Invoice",
+    "prefix": "INV-",
+    "suffix": "",
+    "nextNo": 1,
+    "padding": 3,
+    "__v": 0,
+    "createdAt": "2026-05-05T07:37:58.240Z",
+    "updatedAt": "2026-05-05T07:37:58.240Z"
+  },
+  {
+    "_id": "69f99e560492d76e3fbcd741",
+    "type": "GRN",
+    "prefix": "GRN-",
+    "suffix": "",
+    "nextNo": 1,
+    "padding": 4,
+    "__v": 0,
+    "createdAt": "2026-05-05T07:37:58.242Z",
+    "updatedAt": "2026-05-05T07:37:58.242Z"
+  },
+  {
+    "_id": "69f99e560492d76e3fbcd740",
+    "type": "Cash Receipt",
+    "prefix": "CR-",
+    "suffix": "",
+    "nextNo": 1,
+    "padding": 5,
+    "__v": 0,
+    "createdAt": "2026-05-05T07:37:58.242Z",
+    "updatedAt": "2026-05-05T07:37:58.242Z"
+  }
+]

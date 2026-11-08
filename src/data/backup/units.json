@@ -1,0 +1,24 @@
+[
+  {
+    "_id": "69fd8bf2607e0ebeb8bbd3a3",
+    "code": "ctn",
+    "name": "caton",
+    "type": "Weight",
+    "description": "",
+    "status": "Active",
+    "createdAt": "2026-05-08T07:08:34.762Z",
+    "updatedAt": "2026-05-08T07:08:34.762Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a1c2497638a0ac309f2a53f",
+    "code": "123455",
+    "name": "KG",
+    "type": "Weight",
+    "description": "",
+    "status": "Active",
+    "createdAt": "2026-05-31T12:07:51.403Z",
+    "updatedAt": "2026-05-31T12:07:51.403Z",
+    "__v": 0
+  }
+]

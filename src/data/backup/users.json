@@ -1,0 +1,36 @@
+[
+  {
+    "_id": "69ec67e5c456a0e6149c3baf",
+    "email": "admin@gmail.com",
+    "password": "$2b$10$tdFqdpRo85ZU2NjApzXX5u0DSkEb7NGb4ySKmzD7Moe0L8AHfm5Xu",
+    "role": "admin",
+    "name": "admin",
+    "createdAt": "2026-04-25T07:06:13.256Z",
+    "updatedAt": "2026-04-25T07:06:13.256Z",
+    "__v": 0
+  },
+  {
+    "_id": "69fd6fadab41b73610249b84",
+    "name": "Super Admin",
+    "email": "superadmin@erp.com",
+    "username": "superadmin",
+    "password": "$2a$10$Ky2kXrgWQBm6JOio1AzKFuvz5f3RnkXT.SbziI59u.IB.O.H2zgVm",
+    "role": "Super Admin",
+    "financialYear": "2025-2026",
+    "isActive": true,
+    "__v": 0
+  },
+  {
+    "_id": "6a3e1b93c75426e122592e0b",
+    "name": "Sales User",
+    "email": "user1najeeboilshop@gmail.com",
+    "username": "user1najeeboilshop@gmail.com",
+    "password": "$2a$10$9RveENxd7MmnmaTrBSsILe3yO3K087f3Gxaqq.Ja0zt87wS80hSWa",
+    "role": "sales_user",
+    "financialYear": "2025-2026",
+    "isActive": true,
+    "createdAt": "2026-06-26T06:26:27.015Z",
+    "updatedAt": "2026-06-26T06:26:27.015Z",
+    "__v": 0
+  }
+]

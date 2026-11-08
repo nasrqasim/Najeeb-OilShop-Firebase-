@@ -1,0 +1,62 @@
+[
+  {
+    "_id": "6a1c2083c9eff39fbd1fa65a",
+    "code": "BANK-1780228226855",
+    "name": "Meezan Bank",
+    "accountNo": "26550108850842",
+    "accountTitle": "AL-HADID TRADERS",
+    "type": "Current Account",
+    "balance": 2300,
+    "branch": "Winder",
+    "isDefault": false,
+    "status": "Active",
+    "createdAt": "2026-05-31T11:50:27.446Z",
+    "updatedAt": "2026-06-06T11:11:50.756Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a23ceda0b79833baec356d6",
+    "code": "BANK-1780731609561",
+    "name": "Bank Al-HABIB",
+    "accountNo": "30260095000291012",
+    "accountTitle": "NAJEEB ULLAH",
+    "type": "Current Account",
+    "balance": 0,
+    "branch": "WINDER",
+    "isDefault": false,
+    "status": "Active",
+    "createdAt": "2026-06-06T07:40:10.436Z",
+    "updatedAt": "2026-06-06T11:11:50.756Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a240004a417b3e112e3f635",
+    "code": "BANK-1780744195771",
+    "name": "Easypaisa",
+    "accountNo": "03335411558",
+    "accountTitle": "NAJEEB ULLAH",
+    "type": "Current Account",
+    "balance": 0,
+    "branch": "Winder",
+    "isDefault": false,
+    "status": "Active",
+    "createdAt": "2026-06-06T11:09:56.401Z",
+    "updatedAt": "2026-06-06T11:11:50.756Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a240076a417b3e112e3f639",
+    "code": "BANK-1780744310419",
+    "name": "JazzCash",
+    "accountNo": "03335411558",
+    "accountTitle": "NAJEEB ULLAH",
+    "type": "Current Account",
+    "balance": 0,
+    "branch": "Winder",
+    "isDefault": true,
+    "status": "Active",
+    "createdAt": "2026-06-06T11:11:50.981Z",
+    "updatedAt": "2026-06-06T11:11:50.981Z",
+    "__v": 0
+  }
+]
